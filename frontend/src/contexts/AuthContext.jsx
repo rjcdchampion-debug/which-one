@@ -80,6 +80,8 @@ export function AuthProvider({ children }) {
       .from('users')
       .insert({ id: data.user.id, username, plan: 'free' })
     if (profileError) throw new Error(profileError.message)
+    // Re-fetch profile to clear the premature profileMissing=true set by onAuthStateChange
+    await fetchProfile(data.user.id)
     return data
   }
 
