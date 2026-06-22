@@ -26,17 +26,10 @@ export default function FeedScreen() {
   const [tab, setTab]   = useState('foryou')
   const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [stats, setStats] = useState({ members: 0, online: 0 })
   const channelRef = useRef(null)
 
   const mineToken = tab === 'mine' ? session?.access_token : null
   useEffect(() => { loadFeed() }, [tab, mineToken])
-
-  useEffect(() => {
-    loadStats()
-    const id = setInterval(loadStats, 30_000)
-    return () => clearInterval(id)
-  }, [])
 
   async function loadFeed() {
     setLoading(true)
@@ -52,18 +45,6 @@ export default function FeedScreen() {
     } finally {
       setLoading(false)
     }
-  }
-
-  async function loadStats() {
-    try {
-      const [{ count: members }, { count: online }] = await Promise.all([
-        supabase.from('users').select('*', { count: 'exact', head: true }),
-        supabase.from('users')
-          .select('*', { count: 'exact', head: true })
-          .gte('last_seen', new Date(Date.now() - 5 * 60 * 1000).toISOString()),
-      ])
-      setStats({ members: members ?? 0, online: online ?? 0 })
-    } catch {}
   }
 
   useEffect(() => {
@@ -117,26 +98,16 @@ export default function FeedScreen() {
               <p className="text-[11px] text-[#6B6B6B] tracking-wide uppercase" style={{ marginTop: 1 }}>Let the Crowd Decide</p>
             </div>
 
-            {/* Stats + avatar */}
-            <div className="flex items-center gap-2">
-              <div className="text-right">
-                <p className="leading-tight text-[#6B6B6B]" style={{ fontSize: 9 }}>
-                  <span className="font-semibold text-[#1A1A1A]">{stats.members.toLocaleString()}</span> members
-                </p>
-                <p className="leading-tight text-[#6B6B6B]" style={{ fontSize: 9, marginTop: 2 }}>
-                  <span className="font-semibold text-[#0F6E56]">{stats.online}</span> online
-                </p>
-              </div>
-              <button
-                onClick={() => navigate(user ? '/profile' : '/login')}
-                className="w-8 h-8 rounded-full bg-[#534AB7]/10 flex items-center justify-center text-[#534AB7] font-bold text-sm"
-              >
-                {user
-                  ? (profile?.username || '?')[0].toUpperCase()
-                  : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                }
-              </button>
-            </div>
+            {/* Avatar */}
+            <button
+              onClick={() => navigate(user ? '/profile' : '/login')}
+              className="w-8 h-8 rounded-full bg-[#534AB7]/10 flex items-center justify-center text-[#534AB7] font-bold text-sm"
+            >
+              {user
+                ? (profile?.username || '?')[0].toUpperCase()
+                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              }
+            </button>
           </div>
         </div>
 
