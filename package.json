@@ -1,6 +1,9 @@
 {
   "name": "which-one-api",
   "version": "1.0.0",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "postinstall": "cd backend && npm install",
     "start": "node backend/src/index.js"
