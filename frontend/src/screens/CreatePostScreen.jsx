@@ -128,6 +128,7 @@ export default function CreatePostScreen() {
 
       navigate('/')
     } catch (err) {
+      console.error('Post error:', err)
       setError(err.message || 'Failed to create post. Please try again.')
     } finally {
       setSubmitting(false)

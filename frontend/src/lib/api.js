@@ -14,7 +14,8 @@ async function request(path, { headers: extraHeaders = {}, ...rest } = {}) {
 }
 
 function authHeaders(token) {
-  return token ? { Authorization: `Bearer ${token}` } : {}
+  if (!token || typeof token !== 'string' || token.length < 10) return {}
+  return { Authorization: `Bearer ${token}` }
 }
 
 export const api = {
