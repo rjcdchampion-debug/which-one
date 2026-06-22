@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext'
 
 const TABS = [
   { id: 'foryou',   label: 'For You'  },
-  { id: 'live',     label: 'Live 🔴'  },
+  { id: 'live',     label: 'Live', live: true },
   { id: 'trending', label: 'Trending' },
   { id: 'mine',     label: 'My Posts' },
 ]
@@ -125,7 +125,15 @@ export default function FeedScreen() {
                       : 'border-transparent text-[#6B6B6B]'
                   }`}
                 >
-                  {t.label}
+                  {t.live ? (
+                    <span className="inline-flex items-center justify-center gap-1.5">
+                      {t.label}
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                      </span>
+                    </span>
+                  ) : t.label}
                 </button>
               ))}
             </div>
@@ -171,8 +179,24 @@ export default function FeedScreen() {
 
 function LiveCard({ post, onOpen }) {
   const options    = post.options || []
-  const cover      = options[0]?.photo_url
   const totalVotes = options.reduce((s, o) => s + (o.vote_count || 0), 0)
+  const [activeIdx, setActiveIdx] = useState(0)
+  const [visible, setVisible]     = useState(true)
+
+  useEffect(() => {
+    if (options.length < 2) return
+    const id = setInterval(() => {
+      setVisible(false)
+      setTimeout(() => {
+        setActiveIdx(i => (i + 1) % 2)
+        setVisible(true)
+      }, 350)
+    }, 2500)
+    return () => clearInterval(id)
+  }, [options.length])
+
+  const cover = options[activeIdx]?.photo_url
+  const optLabel = activeIdx === 0 ? 'A' : 'B'
 
   return (
     <button
@@ -180,17 +204,34 @@ function LiveCard({ post, onOpen }) {
       className="relative shrink-0 rounded-card overflow-hidden text-left"
       style={{ width: 160, height: 240 }}
     >
+      {/* Photo with fade */}
       {cover
-        ? <img src={cover} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ? <img
+            src={cover}
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
+            style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.35s ease' }}
+          />
         : <div className="absolute inset-0 bg-[#E5E5E5]" />
       }
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+
+      {/* Stronger gradient so text is always readable */}
+      <div
+        className="absolute inset-0"
+        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0.05) 100%)' }}
+      />
+
+      {/* Timer ring — top right */}
       <div className="absolute top-2 right-2">
         <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
       </div>
+
+      {/* A/B pill — top left */}
       <div className="absolute top-2 left-2 bg-white/90 rounded-full px-2 py-0.5">
-        <span className="text-[10px] font-bold text-[#1A1A1A]">or</span>
+        <span className="text-[10px] font-bold text-[#1A1A1A]">{optLabel}</span>
       </div>
+
+      {/* Question + vote count */}
       <div className="absolute bottom-0 inset-x-0 p-3">
         <p className="text-white text-xs font-semibold leading-snug line-clamp-3">{post.question}</p>
         <p className="text-white font-bold text-[10px] mt-1">{totalVotes} vote{totalVotes !== 1 ? 's' : ''}</p>
