@@ -56,6 +56,7 @@ export default function CreatePostScreen() {
 
   const [step, setStep]       = useState(1)
   const [mode, setMode]       = useState('realtime')
+  const [duration, setDuration] = useState(15)
   const [category, setCategory] = useState(null)
   const [question, setQuestion] = useState('')
   const [photos, setPhotos]   = useState([null, null, null, null])
@@ -122,7 +123,7 @@ export default function CreatePostScreen() {
       }))
 
       await api.createPost(
-        { id: postId, mode, category, question: question || QUESTION_PLACEHOLDERS[category], options },
+        { id: postId, mode, durationMinutes: duration, category, question: question || QUESTION_PLACEHOLDERS[category], options },
         session?.access_token
       )
 
@@ -156,7 +157,10 @@ export default function CreatePostScreen() {
               <Step1
                 mode={mode}
                 onSelect={handleModeSelect}
+                duration={duration}
+                onDuration={setDuration}
                 onContinue={() => setStep(2)}
+                onUpgrade={() => setShowPayModal(true)}
               />
             )}
             {step === 2 && (
@@ -201,7 +205,14 @@ export default function CreatePostScreen() {
   )
 }
 
-function Step1({ mode, onSelect, onContinue }) {
+const DURATIONS = [
+  { mins: 1,    label: '1 min',   free: true  },
+  { mins: 15,   label: '15 min',  free: true  },
+  { mins: 30,   label: '30 min',  free: false },
+  { mins: 60,   label: '1 hour',  free: false },
+]
+
+function Step1({ mode, onSelect, duration, onDuration, onContinue, onUpgrade }) {
   return (
     <div className="space-y-6">
       <div>
@@ -215,17 +226,42 @@ function Step1({ mode, onSelect, onContinue }) {
           onClick={() => onSelect('realtime')}
           icon={<Zap size={22} className="text-[#993C1D]" />}
           title="Real-time"
-          subtitle="15 minutes · Free"
-          description="Instant votes while the moment is happening"
+          subtitle="Live votes while the moment is happening"
           accent="#993C1D"
         />
+
+        {/* Duration pills — shown for real-time */}
+        {mode === 'realtime' && (
+          <div className="flex gap-2 px-1">
+            {DURATIONS.map(d => (
+              <button
+                key={d.mins}
+                onClick={() => d.free ? onDuration(d.mins) : onUpgrade()}
+                className="flex-1 py-2 rounded-btn text-xs font-semibold border transition-all relative"
+                style={{
+                  borderColor: duration === d.mins && d.free ? '#534AB7' : '#E5E5E5',
+                  borderWidth: duration === d.mins && d.free ? 2 : 1,
+                  background: duration === d.mins && d.free ? '#534AB71A' : 'white',
+                  color: duration === d.mins && d.free ? '#534AB7' : d.free ? '#1A1A1A' : '#6B6B6B',
+                }}
+              >
+                {d.label}
+                {!d.free && (
+                  <span className="absolute -top-2 left-1/2 -translate-x-1/2 px-1 py-0 bg-[#534AB7] text-white text-[8px] font-bold rounded-full leading-4">
+                    Plus
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
         <ModeCard
           selected={mode === 'twelve_hour'}
           onClick={() => onSelect('twelve_hour')}
           icon={<Clock size={22} className="text-[#185FA5]" />}
           title="12-hour"
-          subtitle="Richer insights · £1.49"
-          description="Deeper reach with AI analysis and demographics"
+          subtitle="Deeper reach with AI analysis and demographics"
           accent="#185FA5"
           badge="Plus"
         />
@@ -241,7 +277,7 @@ function Step1({ mode, onSelect, onContinue }) {
   )
 }
 
-function ModeCard({ selected, onClick, icon, title, subtitle, description, accent, badge }) {
+function ModeCard({ selected, onClick, icon, title, subtitle, accent, badge }) {
   return (
     <button
       onClick={onClick}
@@ -252,7 +288,7 @@ function ModeCard({ selected, onClick, icon, title, subtitle, description, accen
         background: selected ? `${accent}08` : 'white',
       }}
     >
-      <div className="flex items-start gap-3">
+      <div className="flex items-center gap-3">
         <div
           className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
           style={{ background: `${accent}15` }}
@@ -269,10 +305,9 @@ function ModeCard({ selected, onClick, icon, title, subtitle, description, accen
             )}
           </div>
           <p className="text-xs text-[#6B6B6B] mt-0.5">{subtitle}</p>
-          <p className="text-sm text-[#6B6B6B] mt-1">{description}</p>
         </div>
         <div
-          className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-1"
+          className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
           style={{ borderColor: selected ? accent : '#E5E5E5', background: selected ? accent : 'transparent' }}
         >
           {selected && <div className="w-2 h-2 rounded-full bg-white" />}

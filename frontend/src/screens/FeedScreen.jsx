@@ -188,7 +188,7 @@ function LiveCard({ post, onOpen }) {
     const id = setInterval(() => {
       setVisible(false)
       setTimeout(() => {
-        setActiveIdx(i => (i + 1) % 2)
+        setActiveIdx(i => (i + 1) % options.length)
         setVisible(true)
       }, 350)
     }, 2500)
@@ -196,7 +196,7 @@ function LiveCard({ post, onOpen }) {
   }, [options.length])
 
   const cover = options[activeIdx]?.photo_url
-  const optLabel = activeIdx === 0 ? 'A' : 'B'
+  const optLabel = String.fromCharCode(65 + activeIdx)
 
   return (
     <button

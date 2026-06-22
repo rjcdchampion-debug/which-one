@@ -132,7 +132,7 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { mode, category, question, options, id } = req.body
+    const { mode, durationMinutes, category, question, options, id } = req.body
 
     if (!mode || !category || !options || options.length < 2) {
       return res.status(400).json({ error: 'mode, category, and at least 2 options are required' })
@@ -140,7 +140,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const expiresAt = new Date()
     if (mode === 'realtime') {
-      expiresAt.setMinutes(expiresAt.getMinutes() + 15)
+      const mins = Number(durationMinutes) || 15
+      expiresAt.setMinutes(expiresAt.getMinutes() + mins)
     } else {
       expiresAt.setHours(expiresAt.getHours() + 12)
     }
