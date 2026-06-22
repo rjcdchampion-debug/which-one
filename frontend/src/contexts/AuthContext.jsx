@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { api } from '../lib/api'
 
 const AuthContext = createContext(null)
 
@@ -31,14 +30,17 @@ export function AuthProvider({ children }) {
 
   async function fetchProfile(userId) {
     try {
-      const data = await api.getUserProfile(userId)
-      setProfile(data.user)
-      setProfileMissing(false)
-    } catch (err) {
-      // 404 = no profile row yet; network error = backend unreachable
-      const isNotFound = err?.message?.includes('404') || err?.message?.includes('not found')
-      setProfileMissing(isNotFound)
+      const { data, error } = await supabase.from('users').select('*').eq('id', userId).single()
+      if (error || !data) {
+        setProfile(null)
+        setProfileMissing(true)
+      } else {
+        setProfile(data)
+        setProfileMissing(false)
+      }
+    } catch {
       setProfile(null)
+      setProfileMissing(false)
     } finally {
       setLoading(false)
     }
@@ -75,13 +77,14 @@ export function AuthProvider({ children }) {
     if (!data.session) {
       throw new Error('Check your email to confirm your account, then sign in.')
     }
-    // Insert profile directly via Supabase (RLS allows auth.uid() = id)
     const { error: profileError } = await supabase
       .from('users')
       .insert({ id: data.user.id, username, plan: 'free' })
     if (profileError) throw new Error(profileError.message)
-    // Re-fetch profile to clear the premature profileMissing=true set by onAuthStateChange
-    await fetchProfile(data.user.id)
+    // Set state directly — prevents any race with onAuthStateChange-triggered fetchProfile
+    setProfile({ id: data.user.id, username, plan: 'free' })
+    setProfileMissing(false)
+    setLoading(false)
     return data
   }
 

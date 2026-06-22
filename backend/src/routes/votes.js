@@ -17,8 +17,10 @@ router.post('/', async (req, res) => {
     let resolvedVoterId = voter_id
 
     if (token) {
-      const { data: { user } } = await supabase.auth.getUser(token)
-      if (user) resolvedVoterId = user.id
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+        if (payload.sub) resolvedVoterId = payload.sub
+      } catch {}
     }
 
     if (!resolvedVoterId) {

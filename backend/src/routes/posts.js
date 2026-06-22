@@ -94,9 +94,13 @@ router.get('/', async (req, res) => {
     } else if (tab === 'mine') {
       const token = req.headers.authorization?.split(' ')[1]
       if (!token) return res.json({ posts: [] })
-      const { data: { user } } = await supabase.auth.getUser(token)
-      if (!user) return res.json({ posts: [] })
-      query = supabase.from('posts').select('*').eq('user_id', user.id)
+      let userId
+      try {
+        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+        userId = payload.sub
+      } catch {}
+      if (!userId) return res.json({ posts: [] })
+      query = supabase.from('posts').select('*').eq('user_id', userId)
     }
 
     const { data: posts, error } = await query.order('created_at', { ascending: false }).limit(50)
