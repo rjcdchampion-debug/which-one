@@ -29,7 +29,7 @@ export default function LoginScreen() {
     <div className="h-full overflow-y-auto bg-[#F5F5F5] flex items-center justify-center p-4">
       <div className="w-full max-w-app">
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-[#534AB7]">This or That</h1>
+          <h1 className="text-3xl font-bold text-[#534AB7]">This or That?</h1>
           <p className="text-sm text-[#6B6B6B] mt-2">let the crowd decide</p>
         </div>
 

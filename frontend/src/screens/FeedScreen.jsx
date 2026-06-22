@@ -102,7 +102,7 @@ export default function FeedScreen() {
             <button className="p-1.5 text-[#6B6B6B] hover:text-[#534AB7] transition-colors">
               <Bell size={20} strokeWidth={1.8} />
             </button>
-            <h1 className="text-2xl font-extrabold text-[#534AB7] tracking-tight">This or That</h1>
+            <h1 className="text-2xl font-extrabold text-[#534AB7] tracking-tight">This or That?</h1>
             <button
               onClick={() => navigate(user ? '/profile' : '/login')}
               className="w-8 h-8 rounded-full bg-[#534AB7]/10 flex items-center justify-center text-[#534AB7] font-bold text-sm"
