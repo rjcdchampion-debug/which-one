@@ -73,10 +73,13 @@ export function AuthProvider({ children }) {
     })
     if (error) throw error
     if (!data.session) {
-      // Email confirmation is still enabled in Supabase — user needs to confirm
       throw new Error('Check your email to confirm your account, then sign in.')
     }
-    await api.createUserProfile({ id: data.user.id, username }, data.session.access_token)
+    // Insert profile directly via Supabase (RLS allows auth.uid() = id)
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert({ id: data.user.id, username, plan: 'free' })
+    if (profileError) throw new Error(profileError.message)
     return data
   }
 

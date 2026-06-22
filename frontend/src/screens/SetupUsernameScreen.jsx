@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { api } from '../lib/api'
+import { supabase } from '../lib/supabase'
 
 export default function SetupUsernameScreen() {
   const { user, session, signOut } = useAuth()
@@ -17,7 +17,10 @@ export default function SetupUsernameScreen() {
     setLoading(true)
     setError(null)
     try {
-      await api.createUserProfile({ id: user.id, username: val }, session?.access_token)
+      const { error } = await supabase
+        .from('users')
+        .upsert({ id: user.id, username: val, plan: 'free' }, { onConflict: 'id' })
+      if (error) throw new Error(error.message)
       window.location.href = '/'
     } catch (err) {
       setError(err.message || 'Could not save username. Try a different one.')
