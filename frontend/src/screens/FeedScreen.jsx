@@ -15,16 +15,26 @@ const TABS = [
   { id: 'mine',     label: 'My Posts' },
 ]
 
+const CAT_FILTERS = [
+  { id: 'all',     label: 'All'     },
+  { id: 'fashion', label: 'Fashion' },
+  { id: 'food',    label: 'Food'    },
+  { id: 'home',    label: 'Home'    },
+  { id: 'design',  label: 'Design'  },
+  { id: 'beauty',  label: 'Beauty'  },
+]
+
 const SUPABASE_CONFIGURED = !!(
   import.meta.env.VITE_SUPABASE_URL &&
   import.meta.env.VITE_SUPABASE_ANON_KEY
 )
 
 export default function FeedScreen() {
-  const navigate        = useNavigate()
+  const navigate  = useNavigate()
   const { user, profile, session } = useAuth()
-  const [tab, setTab]   = useState('foryou')
-  const [posts, setPosts] = useState([])
+  const [tab, setTab]         = useState('foryou')
+  const [catFilter, setCatFilter] = useState('all')
+  const [posts, setPosts]     = useState([])
   const [loading, setLoading] = useState(true)
   const channelRef = useRef(null)
 
@@ -47,6 +57,9 @@ export default function FeedScreen() {
     }
   }
 
+  // Reset category filter when changing tabs
+  useEffect(() => { setCatFilter('all') }, [tab])
+
   useEffect(() => {
     if (!SUPABASE_CONFIGURED) return
     const channel = supabase
@@ -66,18 +79,25 @@ export default function FeedScreen() {
     return () => supabase.removeChannel(channel)
   }, [])
 
-  const realtimePosts = posts
-    .filter(p => p.mode === 'realtime' && p.status === 'active')
-    .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
-    .slice(0, 3)
+  const filterByCat = (arr) =>
+    catFilter === 'all' ? arr : arr.filter(p => p.category === catFilter)
 
-  const mainPosts = posts
-    .filter(p => tab === 'live' || !(p.mode === 'realtime' && realtimePosts.includes(p)))
-    .sort((a, b) => {
-      const aV = (a.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
-      const bV = (b.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
-      return bV - aV
-    })
+  const realtimePosts = filterByCat(
+    posts
+      .filter(p => p.mode === 'realtime' && p.status === 'active')
+      .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
+      .slice(0, 3)
+  )
+
+  const mainPosts = filterByCat(
+    posts
+      .filter(p => tab === 'live' || !(p.mode === 'realtime' && realtimePosts.includes(p)))
+      .sort((a, b) => {
+        const aV = (a.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
+        const bV = (b.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
+        return bV - aV
+      })
+  )
 
   return (
     <div className="flex flex-col h-full bg-[#F5F5F5]">
@@ -86,19 +106,13 @@ export default function FeedScreen() {
         {/* App bar */}
         <div className="flex justify-center">
           <div className="w-full max-w-app px-4 pt-safe flex items-center justify-between h-16">
-
-            {/* Bell */}
             <button className="p-1.5 text-[#6B6B6B] hover:text-[#534AB7] transition-colors">
               <Bell size={20} strokeWidth={1.8} />
             </button>
-
-            {/* Title + tagline */}
             <div className="flex flex-col items-center">
               <h1 className="font-extrabold text-[#534AB7] tracking-tight" style={{ fontSize: 26 }}>This or That?</h1>
               <p className="text-[11px] text-[#6B6B6B] tracking-wide uppercase" style={{ marginTop: 1 }}>Let the Crowd Decide</p>
             </div>
-
-            {/* Avatar */}
             <button
               onClick={() => navigate(user ? '/profile' : '/login')}
               className="w-8 h-8 rounded-full bg-[#534AB7]/10 flex items-center justify-center text-[#534AB7] font-bold text-sm"
@@ -111,7 +125,7 @@ export default function FeedScreen() {
           </div>
         </div>
 
-        {/* Tabs — evenly spaced */}
+        {/* Tabs */}
         <div className="flex justify-center">
           <div className="w-full max-w-app">
             <div className="flex">
@@ -120,9 +134,7 @@ export default function FeedScreen() {
                   key={t.id}
                   onClick={() => setTab(t.id)}
                   className={`flex-1 py-2.5 text-sm font-medium border-b-2 transition-colors ${
-                    tab === t.id
-                      ? 'border-[#534AB7] text-[#534AB7]'
-                      : 'border-transparent text-[#6B6B6B]'
+                    tab === t.id ? 'border-[#534AB7] text-[#534AB7]' : 'border-transparent text-[#6B6B6B]'
                   }`}
                 >
                   {t.live ? (
@@ -139,6 +151,25 @@ export default function FeedScreen() {
             </div>
           </div>
         </div>
+
+        {/* Category filter — hidden on Mine tab */}
+        {tab !== 'mine' && (
+          <div className="flex overflow-x-auto scrollbar-hide px-4 py-2 gap-2">
+            {CAT_FILTERS.map(c => (
+              <button
+                key={c.id}
+                onClick={() => setCatFilter(c.id)}
+                className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                style={{
+                  background: catFilter === c.id ? '#534AB7' : '#F0F0F0',
+                  color:      catFilter === c.id ? '#FFFFFF' : '#6B6B6B',
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        )}
       </header>
 
       <main className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
@@ -186,16 +217,17 @@ function LiveCard({ post, onOpen }) {
   useEffect(() => {
     if (options.length < 2) return
     const id = setInterval(() => {
+      // Fade out over 0.8s, then swap photo + label, then fade back in
       setVisible(false)
       setTimeout(() => {
         setActiveIdx(i => (i + 1) % options.length)
         setVisible(true)
-      }, 350)
-    }, 2500)
+      }, 800)
+    }, 3500)
     return () => clearInterval(id)
   }, [options.length])
 
-  const cover = options[activeIdx]?.photo_url
+  const cover    = options[activeIdx]?.photo_url
   const optLabel = String.fromCharCode(65 + activeIdx)
 
   return (
@@ -204,21 +236,21 @@ function LiveCard({ post, onOpen }) {
       className="relative shrink-0 rounded-card overflow-hidden text-left"
       style={{ width: 160, height: 240 }}
     >
-      {/* Photo with fade */}
+      {/* Photo — fades smoothly */}
       {cover
         ? <img
             src={cover}
             alt=""
             className="absolute inset-0 w-full h-full object-cover"
-            style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.35s ease' }}
+            style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.8s ease' }}
           />
         : <div className="absolute inset-0 bg-[#E5E5E5]" />
       }
 
-      {/* Stronger gradient so text is always readable */}
+      {/* Subtle gradient only at the bottom — just enough to read text */}
       <div
-        className="absolute inset-0"
-        style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.45) 45%, rgba(0,0,0,0.05) 100%)' }}
+        className="absolute inset-x-0 bottom-0"
+        style={{ height: '55%', background: 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }}
       />
 
       {/* Timer ring — top right */}
@@ -226,14 +258,17 @@ function LiveCard({ post, onOpen }) {
         <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
       </div>
 
-      {/* A/B pill — top left */}
-      <div className="absolute top-2 left-2 bg-white/90 rounded-full px-2 py-0.5">
+      {/* A/B/C/D pill — top left, fades with photo */}
+      <div
+        className="absolute top-2 left-2 bg-white/90 rounded-full px-2 py-0.5"
+        style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.8s ease' }}
+      >
         <span className="text-[10px] font-bold text-[#1A1A1A]">{optLabel}</span>
       </div>
 
       {/* Question + vote count */}
       <div className="absolute bottom-0 inset-x-0 p-3">
-        <p className="text-white text-xs font-semibold leading-snug line-clamp-3">{post.question}</p>
+        <p className="text-white text-xs font-semibold leading-snug line-clamp-2">{post.question}</p>
         <p className="text-white font-bold text-[10px] mt-1">{totalVotes} vote{totalVotes !== 1 ? 's' : ''}</p>
       </div>
     </button>
