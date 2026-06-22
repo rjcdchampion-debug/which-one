@@ -29,7 +29,7 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md' })
   const secs = secondsLeft % 60
   const label = `${mins}:${String(secs).padStart(2, '0')}`
 
-  const dim = size === 'sm' ? 56 : 72
+  const dim = size === 'sm' ? 62 : 72
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
@@ -51,7 +51,7 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md' })
           style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease' }}
         />
       </svg>
-      <span className="relative font-semibold" style={{ fontSize: size === 'sm' ? 10 : 12, color }}>
+      <span className="relative font-bold" style={{ fontSize: size === 'sm' ? 11 : 12, color }}>
         {label}
       </span>
     </div>

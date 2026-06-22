@@ -77,12 +77,13 @@ export function AuthProvider({ children }) {
     if (!data.session) {
       throw new Error('Check your email to confirm your account, then sign in.')
     }
+    const now = new Date().toISOString()
     const { error: profileError } = await supabase
       .from('users')
-      .insert({ id: data.user.id, username, plan: 'free' })
+      .insert({ id: data.user.id, username, plan: 'free', last_seen: now })
     if (profileError) throw new Error(profileError.message)
     // Set state directly — prevents any race with onAuthStateChange-triggered fetchProfile
-    setProfile({ id: data.user.id, username, plan: 'free' })
+    setProfile({ id: data.user.id, username, plan: 'free', last_seen: now })
     setProfileMissing(false)
     setLoading(false)
     return data

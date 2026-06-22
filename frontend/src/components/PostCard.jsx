@@ -174,7 +174,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
         </p>
 
         {/* Photos */}
-        <div className="px-3 pb-3 space-y-2">
+        <div className="px-4 pb-4 space-y-2">
           {/* First row — always shown, carries the "or" pill */}
           <div className="relative grid grid-cols-2 gap-2">
             {firstTwo.map((option) => {
