@@ -1,0 +1,941 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<title>Which One? — Demo</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;background:#F5F5F5;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#1A1A1A}
+:root{--primary:#534AB7;--coral:#993C1D;--blue:#185FA5;--success:#0F6E56;--border:#E5E5E5;--text2:#6B6B6B}
+#app{max-width:430px;margin:0 auto;min-height:100vh;position:relative;background:#F5F5F5}
+.screen{display:none;flex-direction:column;min-height:100vh}
+.screen.active{display:flex}
+
+/* header */
+.header{position:sticky;top:0;z-index:20;background:#fff;border-bottom:.5px solid var(--border)}
+.header-inner{padding:0 16px;height:52px;display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:22px;font-weight:800;color:var(--primary);letter-spacing:-.02em;display:flex;align-items:center;gap:0}
+.logo-or{font-size:20px;margin:0 1px;line-height:1}
+.tabs{display:flex;overflow-x:auto;padding:0 16px;border-bottom:.5px solid var(--border);background:#fff}
+.tabs::-webkit-scrollbar{display:none}
+.tab{flex-shrink:0;padding:10px 14px;font-size:13px;font-weight:500;color:var(--text2);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:700}
+
+/* bottom nav */
+.bottom-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:430px;background:#fff;border-top:.5px solid var(--border);display:flex;align-items:center;justify-content:space-around;padding-bottom:max(env(safe-area-inset-bottom,0px),8px);z-index:30}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 24px;font-size:11px;font-weight:500;color:var(--text2);cursor:pointer;background:none;border:none}
+.nav-btn.active{color:var(--primary)}
+.nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
+.nav-btn.active svg{stroke-width:2.5}
+.nav-fab{display:flex;flex-direction:column;align-items:center;gap:2px;padding:0 24px;font-size:11px;font-weight:500;color:var(--primary);cursor:pointer;background:none;border:none}
+.fab-circle{width:40px;height:40px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;margin-top:-18px;box-shadow:0 4px 12px rgba(83,74,183,.4)}
+.fab-circle svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2.5}
+
+/* cards */
+.card{background:#fff;border:.5px solid var(--border);border-radius:12px;overflow:hidden}
+.feed-area{padding:12px 16px 120px;display:flex;flex-direction:column;gap:12px}
+
+/* post card */
+.post-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px}
+.post-user{display:flex;align-items:center;gap:8px;min-width:0;flex:1}
+.avatar{width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0}
+.username{font-size:13px;font-weight:600}
+.cat-tag{padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+.post-question{padding:0 14px 10px;font-size:15px;font-weight:700;line-height:1.35}
+
+/* photo grid */
+.photo-grid{padding:0 12px 10px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:6px;position:relative}
+.photo-wrap{position:relative;border-radius:10px;overflow:hidden;cursor:pointer;transition:transform .1s}
+.photo-wrap:active{transform:scale(.97)}
+.photo-wrap img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.photo-wrap.dimmed{opacity:.65}
+.photo-wrap.winner{box-shadow:0 0 0 2.5px var(--win-accent,#993C1D)}
+.or-pill{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:.5px solid var(--border);border-radius:99px;padding:3px 9px;font-size:12px;font-weight:700;pointer-events:none;z-index:5}
+.result-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.65) 0%,transparent 55%);padding:8px;display:flex;flex-direction:column;justify-content:flex-end}
+.result-row{display:flex;align-items:center;justify-content:space-between}
+.result-label{color:#fff;font-size:11px;font-weight:500}
+.result-pct{color:#fff;font-size:15px;font-weight:800}
+.result-bar-bg{margin-top:4px;height:4px;background:rgba(255,255,255,.28);border-radius:2px}
+.result-bar{height:100%;border-radius:2px;transition:width .7s ease}
+.my-vote-badge{position:absolute;top:7px;right:7px;background:rgba(255,255,255,.92);border-radius:99px;padding:2px 7px;font-size:10px;font-weight:700;color:var(--primary)}
+
+/* AI strip */
+.ai-strip{margin:0 12px 10px;background:#F5F5F5;border-radius:8px;padding:8px 12px;display:flex;align-items:flex-start;gap:8px}
+.ai-label{font-size:10px;font-weight:800;color:var(--primary);text-transform:uppercase;letter-spacing:.06em;flex-shrink:0;margin-top:1px}
+.ai-text{font-size:12px;color:var(--text2);line-height:1.4}
+.ai-text b{color:#1A1A1A}
+.action-row{display:flex;align-items:center;gap:10px;padding:0 14px 12px}
+.action-btn{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);background:none;border:none;cursor:pointer}
+.action-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2}
+.vote-total{margin-left:auto;font-size:12px;color:var(--text2)}
+
+/* timer */
+.timer-wrap{position:relative;width:48px;height:48px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.timer-wrap svg{position:absolute;inset:0}
+.timer-text{font-size:10px;font-weight:800;position:relative;z-index:1}
+.twelve-label{font-size:12px;font-weight:600;color:var(--blue);flex-shrink:0}
+
+/* create */
+.create-body{padding:24px 16px 100px;display:flex;flex-direction:column;gap:20px}
+.create-title{font-size:24px;font-weight:800}
+.create-sub{font-size:14px;color:var(--text2);margin-top:4px}
+.progress-dots{display:flex;align-items:center;gap:6px}
+.dot{height:6px;border-radius:3px;transition:all .3s}
+.mode-card{border-radius:12px;border:1.5px solid var(--border);padding:16px;text-align:left;cursor:pointer;background:#fff;width:100%;transition:all .15s}
+.mode-card.sel-rt{border-color:var(--coral);background:rgba(153,60,29,.04)}
+.mode-card.sel-12{border-color:var(--blue);background:rgba(24,95,165,.04)}
+.mode-card-inner{display:flex;align-items:flex-start;gap:12px}
+.mode-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.mode-name{font-size:15px;font-weight:700;display:flex;align-items:center;gap:6px}
+.plus-badge{background:var(--primary);color:#fff;font-size:10px;font-weight:800;padding:1px 6px;border-radius:99px}
+.mode-sub{font-size:12px;color:var(--text2);margin-top:2px}
+.mode-radio{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+.mode-radio.on-coral{border-color:var(--coral);background:var(--coral)}
+.mode-radio.on-blue{border-color:var(--blue);background:var(--blue)}
+.mode-radio-dot{width:8px;height:8px;border-radius:50%;background:#fff}
+.cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.cat-card{border-radius:12px;border:1px solid var(--border);padding:20px 8px;text-align:center;cursor:pointer;background:#fff;transition:all .15s;width:100%}
+.cat-card.selected{border-color:var(--primary);border-width:2px;background:rgba(83,74,183,.08)}
+.cat-emoji{font-size:24px}
+.cat-name{font-size:13px;font-weight:600;margin-top:4px;color:#1A1A1A}
+.cat-card.selected .cat-name{color:var(--primary)}
+.upload-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.upload-slot{aspect-ratio:1;border-radius:12px;overflow:hidden;position:relative}
+.upload-empty{width:100%;height:100%;background:#fff;border:1.5px dashed var(--border);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:border-color .2s}
+.upload-empty:hover,.upload-empty:active{border-color:var(--primary)}
+.upload-empty svg{width:20px;height:20px;stroke:var(--text2);fill:none;stroke-width:2}
+.slot-label{font-size:12px;font-weight:600;color:var(--text2)}
+.slot-req{font-size:10px;color:var(--coral)}
+.upload-preview{width:100%;height:100%;object-fit:cover;display:block}
+.upload-remove{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.55);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.upload-remove svg{width:13px;height:13px;stroke:#fff;fill:none;stroke-width:2.5}
+.q-input{width:100%;padding:12px 14px;border:.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;resize:none;color:#1A1A1A;outline:none;transition:border-color .2s;background:#fff}
+.q-input:focus{border-color:var(--primary)}
+.char-count{font-size:11px;color:var(--text2);text-align:right;margin-top:4px}
+.field-label{font-size:14px;font-weight:600;display:block;margin-bottom:6px}
+.btn-primary{width:100%;padding:15px;background:var(--primary);color:#fff;font-size:15px;font-weight:700;border-radius:8px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn-primary:disabled{background:#E5E5E5;color:var(--text2);cursor:not-allowed}
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:100;display:flex;align-items:flex-end;justify-content:center}
+.modal-bg.hidden{display:none}
+.modal-sheet{background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:430px;padding:20px 20px 36px}
+.modal-handle{width:36px;height:4px;background:#E5E5E5;border-radius:2px;margin:0 auto 16px}
+.modal-icon{width:36px;height:36px;border-radius:50%;background:rgba(83,74,183,.1);display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.modal-icon svg{width:18px;height:18px;stroke:var(--primary);fill:none;stroke-width:2}
+.modal-features{background:#F5F5F5;border-radius:10px;padding:14px;margin:16px 0}
+.modal-feat-title{font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px}
+.modal-feat-item{display:flex;align-items:flex-start;gap:8px;font-size:13px;margin-bottom:4px}
+.modal-feat-check{color:var(--primary);font-weight:700}
+.btn-secondary{width:100%;padding:12px;font-size:14px;color:var(--text2);background:none;border:none;cursor:pointer;margin-top:4px}
+
+/* auth */
+.auth-wrap{padding:40px 20px 80px;flex:1;display:flex;flex-direction:column}
+.auth-logo{text-align:center;margin-bottom:32px}
+.auth-logo h1{font-size:32px;font-weight:800;color:var(--primary)}
+.auth-logo p{font-size:14px;color:var(--text2);margin-top:6px}
+.auth-card{background:#fff;border:.5px solid var(--border);border-radius:12px;padding:24px}
+.auth-card h2{font-size:20px;font-weight:800;margin-bottom:20px}
+.field{margin-bottom:14px}
+.field label{font-size:13px;font-weight:600;display:block;margin-bottom:6px}
+.field input{width:100%;padding:12px 14px;border:.5px solid var(--border);border-radius:8px;font-size:14px;font-family:inherit;outline:none;transition:border-color .2s;color:#1A1A1A;background:#fff}
+.field input:focus{border-color:var(--primary)}
+.field input.prefix{padding-left:26px}
+.field-wrap{position:relative}
+.field-prefix{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text2);font-size:14px;pointer-events:none}
+.auth-switch{text-align:center;font-size:13px;color:var(--text2);margin-top:14px}
+.auth-switch a{color:var(--primary);font-weight:700;cursor:pointer;text-decoration:underline}
+.guest-link{text-align:center;font-size:13px;color:var(--text2);margin-top:12px}
+.guest-link a{color:var(--primary);cursor:pointer;font-weight:600}
+.err-box{background:#fff0f0;border:.5px solid #fca5a5;border-radius:8px;padding:10px 14px;font-size:13px;color:#b91c1c;margin-bottom:12px}
+
+/* profile */
+.profile-header{background:#fff;border:.5px solid var(--border);border-radius:12px;padding:20px;display:flex;align-items:center;gap:16px}
+.profile-avatar{width:64px;height:64px;border-radius:50%;background:var(--primary);color:#fff;font-size:26px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.profile-name{font-size:20px;font-weight:800}
+.plan-badge{display:inline-block;margin-top:4px;padding:2px 10px;border-radius:99px;background:#F5F5F5;font-size:12px;font-weight:700;color:var(--text2)}
+.stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.stat-card{background:#fff;border:.5px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center}
+.stat-num{font-size:22px;font-weight:800}
+.stat-lbl{font-size:11px;color:var(--text2);margin-top:2px}
+.post-thumb-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.post-thumb{position:relative;border-radius:10px;overflow:hidden;aspect-ratio:1;cursor:pointer}
+.post-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.post-thumb-overlay{position:absolute;inset-x:0;bottom:0;background:linear-gradient(to top,rgba(0,0,0,.6),transparent);padding:8px}
+.post-thumb-q{font-size:11px;font-weight:600;color:#fff;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.post-thumb-v{font-size:10px;color:rgba(255,255,255,.7);margin-top:2px}
+.section-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text2);margin:16px 0 8px}
+.empty-state{text-align:center;padding:48px 24px}
+.empty-state .emoji{font-size:44px;margin-bottom:14px}
+.empty-state p{font-size:14px;color:var(--text2);line-height:1.5}
+
+/* toast */
+.toast{position:fixed;top:68px;left:50%;transform:translateX(-50%) translateY(-80px);background:#1A1A1A;color:#fff;padding:10px 18px;border-radius:99px;font-size:13px;font-weight:600;z-index:200;transition:transform .35s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;pointer-events:none}
+.toast.show{transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- ══ FEED ══════════════════════════════════════════════════ -->
+<div class="screen active" id="screen-feed">
+  <div class="header">
+    <div class="header-inner">
+      <span class="logo">Which One?</span>
+      <div id="feed-chip"></div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab(this,'foryou')">For You</button>
+      <button class="tab" onclick="switchTab(this,'live')">Live 🔴</button>
+      <button class="tab" onclick="switchTab(this,'trending')">Trending</button>
+      <button class="tab" onclick="switchTab(this,'mine')">My Posts</button>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto"><div class="feed-area" id="feed-area"></div></div>
+  <nav class="bottom-nav">
+    <button class="nav-btn active" id="nav-feed" onclick="showNav('feed',this)">
+      <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Feed
+    </button>
+    <button class="nav-fab" onclick="requireAuth('create-1')">
+      <div class="fab-circle"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+      <span style="margin-top:2px">Post</span>
+    </button>
+    <button class="nav-btn" id="nav-profile" onclick="showNav('profile',this)">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Profile
+    </button>
+  </nav>
+</div>
+
+<!-- ══ CREATE — STEP 1 ═══════════════════════════════════════ -->
+<div class="screen" id="screen-create-1">
+  <div class="header">
+    <div class="header-inner">
+      <button style="background:none;border:none;cursor:pointer;padding:4px;display:flex" onclick="go('feed')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="progress-dots">
+        <div class="dot" style="width:20px;background:var(--primary)"></div>
+        <div class="dot" style="width:6px;background:#E5E5E5"></div>
+        <div class="dot" style="width:6px;background:#E5E5E5"></div>
+      </div>
+      <div style="width:30px"></div>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div class="create-body">
+      <div><div class="create-title">Choose mode</div><div class="create-sub">How long should your post run?</div></div>
+      <button class="mode-card sel-rt" id="mc-rt" onclick="selectMode('realtime')">
+        <div class="mode-card-inner">
+          <div class="mode-icon" style="background:rgba(153,60,29,.12)">
+            <svg viewBox="0 0 24 24" fill="#993C1D" stroke="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="mode-name">Real-time</div>
+            <div class="mode-sub">15 minutes · Free</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:4px">Instant votes while the moment is happening</div>
+          </div>
+          <div class="mode-radio on-coral" id="radio-rt"><div class="mode-radio-dot"></div></div>
+        </div>
+      </button>
+      <button class="mode-card" id="mc-12" onclick="selectMode('twelve')">
+        <div class="mode-card-inner">
+          <div class="mode-icon" style="background:rgba(24,95,165,.12)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#185FA5" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <div style="flex:1">
+            <div class="mode-name">12-hour <span class="plus-badge">Plus</span></div>
+            <div class="mode-sub">Richer insights · £1.49</div>
+            <div style="font-size:12px;color:var(--text2);margin-top:4px">Deeper reach with AI analysis</div>
+          </div>
+          <div class="mode-radio" id="radio-12"></div>
+        </div>
+      </button>
+      <button class="btn-primary" onclick="go('create-2')">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CREATE — STEP 2 ═══════════════════════════════════════ -->
+<div class="screen" id="screen-create-2">
+  <div class="header">
+    <div class="header-inner">
+      <button style="background:none;border:none;cursor:pointer;padding:4px;display:flex" onclick="go('create-1')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="progress-dots">
+        <div class="dot" style="width:6px;background:var(--primary)"></div>
+        <div class="dot" style="width:20px;background:var(--primary)"></div>
+        <div class="dot" style="width:6px;background:#E5E5E5"></div>
+      </div>
+      <div style="width:30px"></div>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div class="create-body">
+      <div><div class="create-title">Select category</div><div class="create-sub">AI uses this to find relevant trends</div></div>
+      <div class="cat-grid">
+        <button class="cat-card" onclick="selectCat(this,'fashion')"><div class="cat-emoji">👗</div><div class="cat-name">Fashion</div></button>
+        <button class="cat-card" onclick="selectCat(this,'food')"><div class="cat-emoji">🍽️</div><div class="cat-name">Food</div></button>
+        <button class="cat-card" onclick="selectCat(this,'home')"><div class="cat-emoji">🏠</div><div class="cat-name">Home</div></button>
+        <button class="cat-card" onclick="selectCat(this,'design')"><div class="cat-emoji">🎨</div><div class="cat-name">Design</div></button>
+        <button class="cat-card" onclick="selectCat(this,'beauty')"><div class="cat-emoji">💄</div><div class="cat-name">Beauty</div></button>
+        <button class="cat-card" onclick="selectCat(this,'other')"><div class="cat-emoji">✨</div><div class="cat-name">Other</div></button>
+      </div>
+      <button class="btn-primary" id="btn-cat-cont" disabled onclick="go('create-3')">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CREATE — STEP 3 ═══════════════════════════════════════ -->
+<div class="screen" id="screen-create-3">
+  <div class="header">
+    <div class="header-inner">
+      <button style="background:none;border:none;cursor:pointer;padding:4px;display:flex" onclick="go('create-2')">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="progress-dots">
+        <div class="dot" style="width:6px;background:var(--primary)"></div>
+        <div class="dot" style="width:6px;background:var(--primary)"></div>
+        <div class="dot" style="width:20px;background:var(--primary)"></div>
+      </div>
+      <div style="width:30px"></div>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div class="create-body">
+      <div><div class="create-title">Upload photos</div><div class="create-sub">Tap a slot to pick from your camera roll</div></div>
+      <input type="file" id="fi-0" accept="image/*" style="display:none" onchange="handleFile(0,this)">
+      <input type="file" id="fi-1" accept="image/*" style="display:none" onchange="handleFile(1,this)">
+      <input type="file" id="fi-2" accept="image/*" style="display:none" onchange="handleFile(2,this)">
+      <input type="file" id="fi-3" accept="image/*" style="display:none" onchange="handleFile(3,this)">
+      <div class="upload-grid" id="upload-grid"></div>
+      <div>
+        <label class="field-label">Your question <span style="font-weight:400;color:var(--text2)">(optional)</span></label>
+        <textarea class="q-input" id="q-input" rows="2" placeholder="Help me decide…" maxlength="120" oninput="document.getElementById('qcount').textContent=this.value.length"></textarea>
+        <div class="char-count"><span id="qcount">0</span>/120</div>
+      </div>
+      <div id="upload-err" class="err-box" style="display:none"></div>
+      <button class="btn-primary" id="btn-post" disabled onclick="submitPost()">Post · starts now</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PROFILE ═══════════════════════════════════════════════ -->
+<div class="screen" id="screen-profile">
+  <div class="header">
+    <div class="header-inner">
+      <span style="font-size:16px;font-weight:700">Profile</span>
+      <button id="signout-btn" style="background:none;border:none;cursor:pointer;color:var(--text2);display:flex;align-items:center;gap:5px;font-size:13px" onclick="logout()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sign out
+      </button>
+    </div>
+  </div>
+  <div style="flex:1;overflow-y:auto">
+    <div style="padding:12px 16px 120px" id="profile-body"></div>
+  </div>
+  <nav class="bottom-nav">
+    <button class="nav-btn" onclick="showNav('feed',document.getElementById('nav-feed'))">
+      <svg viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Feed
+    </button>
+    <button class="nav-fab" onclick="requireAuth('create-1')">
+      <div class="fab-circle"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>
+      <span style="margin-top:2px">Post</span>
+    </button>
+    <button class="nav-btn active">
+      <svg viewBox="0 0 24 24" stroke-width="2.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      Profile
+    </button>
+  </nav>
+</div>
+
+<!-- ══ LOGIN ══════════════════════════════════════════════════ -->
+<div class="screen" id="screen-login">
+  <div class="auth-wrap">
+    <div class="auth-logo"><h1>Which One?</h1><p>Votes from the crowd, decided in minutes</p></div>
+    <div class="auth-card">
+      <h2>Sign in</h2>
+      <div id="login-err" class="err-box" style="display:none"></div>
+      <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="field"><label>Password</label><input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="btn-primary" onclick="doLogin()">Sign in</button>
+      <div class="auth-switch">No account? <a onclick="go('register')">Create one free</a></div>
+    </div>
+    <div class="guest-link">Or <a onclick="go('feed')">browse as a guest</a> — vote without signing in</div>
+  </div>
+</div>
+
+<!-- ══ REGISTER ═══════════════════════════════════════════════ -->
+<div class="screen" id="screen-register">
+  <div class="auth-wrap">
+    <div class="auth-logo"><h1>Which One?</h1><p>Join the community</p></div>
+    <div class="auth-card">
+      <h2>Create account</h2>
+      <div id="reg-err" class="err-box" style="display:none"></div>
+      <div class="field">
+        <label>Username</label>
+        <div class="field-wrap">
+          <span class="field-prefix">@</span>
+          <input type="text" id="reg-user" placeholder="yourname" class="prefix" autocomplete="username" autocapitalize="none" onkeydown="if(event.key==='Enter')doRegister()">
+        </div>
+      </div>
+      <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com" autocomplete="email"></div>
+      <div class="field"><label>Password</label><input type="password" id="reg-pass" placeholder="Min 6 characters" autocomplete="new-password" onkeydown="if(event.key==='Enter')doRegister()"></div>
+      <button class="btn-primary" onclick="doRegister()">Create account</button>
+      <div class="auth-switch">Already have one? <a onclick="go('login')">Sign in</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAYMENT MODAL ══════════════════════════════════════════ -->
+<div class="modal-bg hidden" id="pay-modal">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-icon">
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+    </div>
+    <div style="font-size:18px;font-weight:800;margin-bottom:4px">This or That Plus</div>
+    <div style="font-size:13px;color:var(--text2)">12-hour posts with AI deep-dive analysis</div>
+    <div class="modal-features">
+      <div class="modal-feat-title">What you get</div>
+      <div class="modal-feat-item"><span class="modal-feat-check">✓</span> 12-hour voting window</div>
+      <div class="modal-feat-item"><span class="modal-feat-check">✓</span> AI verdict with trend data &amp; sources</div>
+      <div class="modal-feat-item"><span class="modal-feat-check">✓</span> Demographic breakdown of voters</div>
+    </div>
+    <button class="btn-primary" onclick="simulatePurchase()">Simulate purchase · £1.49</button>
+    <button class="btn-secondary" onclick="closePayModal()">Maybe later</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Constants ─────────────────────────────────────────────────
+const CAT_COLOR={fashion:'#534AB7',food:'#0F6E56',home:'#185FA5',design:'#1A1A1A',beauty:'#993C1D',other:'#6B6B6B'}
+const CAT_PH={fashion:'Which for the occasion?',food:'Which dish looks better?',home:'Which fits the space?',design:'Which direction?',beauty:'Which look for tonight?',other:'Help me decide…'}
+
+// ── Seed posts (pre-loaded with real Unsplash photos) ─────────
+const SEEDS=[
+  {
+    id:'seed-1',username:'stylestar',mode:'realtime',category:'fashion',
+    question:'Dinner date tonight — which outfit? 🍽️',
+    expires_at:new Date(Date.now()+7*60*1000).toISOString(),
+    status:'active',created_at:new Date(Date.now()-4*60*1000).toISOString(),
+    options:[
+      {id:'s1a',label:'Option A',photo_url:'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&q=80',vote_count:34},
+      {id:'s1b',label:'Option B',photo_url:'https://images.unsplash.com/photo-1496747611176-843222e1e57c?w=600&q=80',vote_count:21}
+    ],
+    ai_verdicts:[{recommendation_option_id:'s1a',insights:[{text:'Trending in evening wear this season'}]}]
+  },
+  {
+    id:'seed-2',username:'foodie_uk',mode:'twelve_hour',category:'food',
+    question:'Cooking for friends — which recipe should I make?',
+    expires_at:new Date(Date.now()+9*3600*1000).toISOString(),
+    status:'active',created_at:new Date(Date.now()-2*3600*1000).toISOString(),
+    options:[
+      {id:'s2a',label:'Option A',photo_url:'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=600&q=80',vote_count:87},
+      {id:'s2b',label:'Option B',photo_url:'https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=600&q=80',vote_count:53}
+    ],
+    ai_verdicts:[{recommendation_option_id:'s2a',insights:[{text:'Higher engagement predicted for this dish'}]}]
+  },
+  {
+    id:'seed-3',username:'interior.xyz',mode:'twelve_hour',category:'home',
+    question:'New sofa delivery — which colour to keep?',
+    expires_at:new Date(Date.now()+4*3600*1000).toISOString(),
+    status:'active',created_at:new Date(Date.now()-8*3600*1000).toISOString(),
+    options:[
+      {id:'s3a',label:'Option A',photo_url:'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600&q=80',vote_count:112},
+      {id:'s3b',label:'Option B',photo_url:'https://images.unsplash.com/photo-1484101403633-562f891dc89a?w=600&q=80',vote_count:76}
+    ],
+    ai_verdicts:[{recommendation_option_id:'s3a',insights:[{text:'Warmer neutrals trending in interior design'}]}]
+  },
+  {
+    id:'seed-4',username:'creative_jo',mode:'realtime',category:'design',
+    question:'Logo concept for the rebrand — A or B?',
+    expires_at:new Date(Date.now()+11*60*1000).toISOString(),
+    status:'active',created_at:new Date(Date.now()-4*60*1000).toISOString(),
+    options:[
+      {id:'s4a',label:'Option A',photo_url:'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80',vote_count:19},
+      {id:'s4b',label:'Option B',photo_url:'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=600&q=80',vote_count:26}
+    ],
+    ai_verdicts:[{recommendation_option_id:'s4b',insights:[{text:'B aligns with current minimal brand trends'}]}]
+  },
+  {
+    id:'seed-5',username:'glowup.daily',mode:'twelve_hour',category:'beauty',
+    question:'Festival makeup — which look?',
+    expires_at:new Date(Date.now()+6*3600*1000).toISOString(),
+    status:'active',created_at:new Date(Date.now()-6*3600*1000).toISOString(),
+    options:[
+      {id:'s5a',label:'Option A',photo_url:'https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?w=600&q=80',vote_count:203},
+      {id:'s5b',label:'Option B',photo_url:'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=600&q=80',vote_count:178}
+    ],
+    ai_verdicts:[{recommendation_option_id:'s5a',insights:[{text:'Bold eye looks dominating festival season'}]}]
+  }
+]
+
+// ── Storage ───────────────────────────────────────────────────
+const K={users:'tot_users',session:'tot_session',posts:'tot_posts',votes:'tot_votes',seeded:'tot_seeded2'}
+
+function getPosts(){return JSON.parse(localStorage.getItem(K.posts)||'[]')}
+function savePosts(p){localStorage.setItem(K.posts,JSON.stringify(p))}
+function getVotes(){return JSON.parse(localStorage.getItem(K.votes)||'{}')}
+function saveVotes(v){localStorage.setItem(K.votes,JSON.stringify(v))}
+function getUsers(){return JSON.parse(localStorage.getItem(K.users)||'{}')}
+function getSession(){return JSON.parse(localStorage.getItem(K.session)||'null')}
+
+function initSeedData(){
+  // Reset seeds each time so timers are fresh
+  if(!localStorage.getItem(K.seeded)){
+    const existing=getPosts().filter(p=>!p.id.startsWith('seed-'))
+    savePosts([...SEEDS,...existing])
+    localStorage.setItem(K.seeded,'1')
+  } else {
+    // Refresh seed expiry times so the page always has live timers
+    const posts=getPosts()
+    const hasSeeds=posts.some(p=>p.id==='seed-1')
+    if(!hasSeeds){
+      savePosts([...SEEDS,...posts])
+    } else {
+      // Nudge seed realtime timers forward if they've expired
+      let changed=false
+      posts.forEach(p=>{
+        if(p.id.startsWith('seed-')&&p.mode==='realtime'&&new Date(p.expires_at)<new Date()){
+          p.expires_at=new Date(Date.now()+8*60*1000).toISOString()
+          p.status='active'; changed=true
+        }
+      })
+      if(changed) savePosts(posts)
+    }
+  }
+}
+
+// ── Auth ──────────────────────────────────────────────────────
+function doRegister(){
+  const u=document.getElementById('reg-user').value.trim().toLowerCase()
+  const e=document.getElementById('reg-email').value.trim().toLowerCase()
+  const p=document.getElementById('reg-pass').value
+  const err=document.getElementById('reg-err'); err.style.display='none'
+  if(u.length<3) return showErr(err,'Username must be at least 3 characters')
+  if(!/^[a-z0-9_.]+$/.test(u)) return showErr(err,'Username: letters, numbers, _ and . only')
+  if(!e.includes('@')) return showErr(err,'Enter a valid email address')
+  if(p.length<6) return showErr(err,'Password must be at least 6 characters')
+  const users=getUsers()
+  if(users[u]) return showErr(err,'Username already taken')
+  if(Object.values(users).some(x=>x.email===e)) return showErr(err,'Email already registered')
+  users[u]={email:e,password:p}
+  localStorage.setItem(K.users,JSON.stringify(users))
+  localStorage.setItem(K.session,JSON.stringify({username:u,email:e}))
+  updateFeedChip(); renderFeed(); go('feed')
+  showToast('Welcome, @'+u+'!')
+}
+
+function doLogin(){
+  const e=document.getElementById('login-email').value.trim().toLowerCase()
+  const p=document.getElementById('login-pass').value
+  const err=document.getElementById('login-err'); err.style.display='none'
+  const users=getUsers()
+  const entry=Object.entries(users).find(([_,u])=>u.email===e&&u.password===p)
+  if(!entry) return showErr(err,'Incorrect email or password')
+  localStorage.setItem(K.session,JSON.stringify({username:entry[0],email:e}))
+  updateFeedChip(); renderFeed(); go('feed')
+  showToast('Welcome back, @'+entry[0]+'!')
+}
+
+function logout(){
+  localStorage.removeItem(K.session)
+  updateFeedChip(); renderFeed(); go('feed')
+  showToast('Signed out')
+}
+
+function requireAuth(scr){
+  if(!getSession()){go('login');return}
+  if(scr==='create-1') resetCreate()
+  go(scr)
+}
+
+function showErr(el,msg){el.textContent=msg;el.style.display='block'}
+
+// ── Nav ───────────────────────────────────────────────────────
+let currentTab='foryou'
+
+function go(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'))
+  const el=document.getElementById('screen-'+screen)
+  if(el) el.classList.add('active')
+  if(screen==='profile') renderProfile()
+  if(screen==='feed') renderFeed()
+  if(screen==='create-3') renderSlots()
+}
+
+function showNav(screen,btn){
+  go(screen)
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'))
+  if(btn) btn.classList.add('active')
+}
+
+function switchTab(btn,tab){
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'))
+  btn.classList.add('active')
+  currentTab=tab; renderFeed()
+}
+
+// ── Feed ──────────────────────────────────────────────────────
+function tvotes(p){return(p.options||[]).reduce((s,o)=>s+(o.vote_count||0),0)}
+
+function renderFeed(){
+  const session=getSession()
+  const now=Date.now()
+  let posts=getPosts()
+
+  // Expire old realtime posts in storage
+  let changed=false
+  posts.forEach(p=>{
+    if(p.mode==='realtime'&&p.status==='active'&&new Date(p.expires_at)<now){
+      p.status='closed'; changed=true
+    }
+  })
+  if(changed) savePosts(posts)
+
+  if(currentTab==='live'){
+    posts=posts.filter(p=>p.mode==='realtime'&&p.status==='active')
+      .sort((a,b)=>new Date(a.expires_at)-new Date(b.expires_at))
+  } else if(currentTab==='trending'){
+    posts=posts.filter(p=>p.status==='active')
+      .sort((a,b)=>tvotes(b)-tvotes(a))
+  } else if(currentTab==='mine'){
+    if(!session){
+      document.getElementById('feed-area').innerHTML=`<div class="empty-state"><div class="emoji">🔒</div><p>Sign in to see your posts</p><br><br><button class="btn-primary" style="width:auto;padding:10px 24px" onclick="go('login')">Sign in</button></div>`
+      return
+    }
+    posts=posts.filter(p=>p.username===session.username)
+  } else {
+    // For You: active first by recency, seeds at top
+    posts=posts.filter(p=>p.status==='active')
+      .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at))
+  }
+
+  const fa=document.getElementById('feed-area')
+  if(posts.length===0){
+    fa.innerHTML=currentTab==='mine'
+      ?`<div class="empty-state"><div class="emoji">🔀</div><p>No posts yet — tap + to create one</p></div>`
+      :`<div class="empty-state"><div class="emoji">🔀</div><p>Nothing here yet</p></div>`
+    return
+  }
+  fa.innerHTML=posts.map(p=>postCardHTML(p)).join('')
+}
+
+function postCardHTML(p){
+  const opts=p.options||[]
+  const votes=getVotes()
+  const myVote=votes[p.id]
+  const showResults=!!myVote||(p.status==='closed')
+  const total=tvotes(p)
+  const winnerId=opts.reduce((mx,o)=>(!mx||(o.vote_count||0)>(mx.vote_count||0)?o:mx),null)?.id
+  const ai=(p.ai_verdicts||[])[0]
+  const aiOpt=ai?opts.find(o=>o.id===ai.recommendation_option_id):null
+  const isRT=p.mode==='realtime'
+  const accent=isRT?'#993C1D':'#185FA5'
+  const catColor=CAT_COLOR[p.category]||'#6B6B6B'
+
+  // Timer
+  const msLeft=Math.max(0,new Date(p.expires_at)-Date.now())
+  const secsLeft=Math.floor(msLeft/1000)
+  const pct=Math.min(1,secsLeft/(15*60))
+  const offset=201.06*(1-pct)
+  const tColor=secsLeft<120?'#993C1D':secsLeft<300?'#f59e0b':'#534AB7'
+  const tLabel=Math.floor(secsLeft/60)+':'+(secsLeft%60).toString().padStart(2,'0')
+  const hrsLeft=Math.max(0,msLeft/3600000)
+  const hLabel=hrsLeft<1?Math.ceil(hrsLeft*60)+'m left':Math.floor(hrsLeft)+'h left'
+
+  const timerHTML=isRT&&p.status==='active'
+    ?`<div class="timer-wrap">
+        <svg width="48" height="48" viewBox="0 0 80 80" style="position:absolute;inset:0;transform:rotate(-90deg)">
+          <circle cx="40" cy="40" r="32" fill="none" stroke="#E5E5E5" stroke-width="6"/>
+          <circle cx="40" cy="40" r="32" fill="none" stroke="${tColor}" stroke-width="6" stroke-linecap="round" stroke-dasharray="201.06" stroke-dashoffset="${offset}"/>
+        </svg>
+        <span class="timer-text" style="color:${tColor}">${tLabel}</span>
+      </div>`
+    :`<span class="twelve-label">${p.status==='closed'?'Closed':hLabel}</span>`
+
+  function optHTML(o){
+    const pp=total>0?Math.round((o.vote_count/total)*100):0
+    const isW=showResults&&o.id===winnerId
+    const isMyV=o.id===myVote
+    let cls='photo-wrap'
+    if(showResults&&!isW) cls+=' dimmed'
+    const ringStyle=isW?`style="box-shadow:0 0 0 2.5px ${accent}"`:`style=""`
+    return `<div class="${cls}" ${ringStyle} onclick="castVote('${p.id}','${o.id}')">
+      <img src="${o.photo_url}" loading="lazy" onerror="this.src='https://picsum.photos/seed/${esc(o.id)}/300/300'">
+      ${showResults?`<div class="result-overlay">
+        <div class="result-row">
+          <span class="result-label">${esc(o.label)}</span>
+          <span class="result-pct">${pp}%</span>
+        </div>
+        <div class="result-bar-bg">
+          <div class="result-bar" style="width:${pp}%;background:${isW?accent:'rgba(255,255,255,.7)'}"></div>
+        </div>
+      </div>`:''}
+      ${isMyV?'<div class="my-vote-badge">Your vote ✓</div>':''}
+    </div>`
+  }
+
+  const firstTwo=opts.slice(0,2)
+  const extra=opts.slice(2)
+
+  return `<div class="card">
+    <div class="post-header">
+      <div class="post-user">
+        <div class="avatar">${(p.username||'?')[0].toUpperCase()}</div>
+        <span class="username">@${esc(p.username||'anon')}</span>
+        <span class="cat-tag" style="background:${catColor};margin-left:4px">${p.category}</span>
+      </div>
+      ${timerHTML}
+    </div>
+    <div class="post-question">${esc(p.question)}</div>
+    <div class="photo-grid">
+      <div class="grid-2">
+        ${firstTwo.map(optHTML).join('')}
+        ${showResults?'':`<div class="or-pill">or</div>`}
+      </div>
+      ${extra.length?`<div class="grid-2" style="margin-top:6px">${extra.map(optHTML).join('')}</div>`:''}
+    </div>
+    <div class="ai-strip">
+      <span class="ai-label">AI</span>
+      <p class="ai-text">${aiOpt
+        ?`voted <b>${esc(aiOpt.label)}</b> · ${esc(ai.insights?.[0]?.text||'Based on current trends')}`
+        :'AI analysis pending…'
+      }</p>
+    </div>
+    <div class="action-row">
+      <button class="action-btn"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>0</button>
+      <button class="action-btn"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></button>
+      <span class="vote-total">${total} vote${total!==1?'s':''}</span>
+    </div>
+  </div>`
+}
+
+function castVote(postId,optionId){
+  const votes=getVotes()
+  if(votes[postId]){showToast('Already voted on this one');return}
+  votes[postId]=optionId
+  saveVotes(votes)
+  const posts=getPosts()
+  const post=posts.find(p=>p.id===postId)
+  if(post){
+    const opt=post.options.find(o=>o.id===optionId)
+    if(opt) opt.vote_count=(opt.vote_count||0)+1
+    savePosts(posts)
+  }
+  renderFeed()
+  showToast('Vote cast!')
+}
+
+// ── Create ────────────────────────────────────────────────────
+let selectedMode='realtime',selectedCat=null,photoData=[null,null,null,null],plusUnlocked=false
+
+function resetCreate(){
+  selectedMode='realtime'; selectedCat=null; photoData=[null,null,null,null]
+  document.getElementById('q-input').value=''
+  document.getElementById('qcount').textContent='0'
+  document.getElementById('btn-cat-cont').disabled=true
+  document.querySelectorAll('.cat-card').forEach(c=>c.classList.remove('selected'))
+  document.getElementById('mc-rt').className='mode-card sel-rt'
+  document.getElementById('mc-12').className='mode-card'
+  document.getElementById('radio-rt').className='mode-radio on-coral'
+  document.getElementById('radio-rt').innerHTML='<div class="mode-radio-dot"></div>'
+  document.getElementById('radio-12').className='mode-radio'
+  document.getElementById('radio-12').innerHTML=''
+  ;[0,1,2,3].forEach(i=>{const f=document.getElementById('fi-'+i);if(f)f.value=''})
+  document.getElementById('upload-err').style.display='none'
+}
+
+function selectMode(m){
+  if(m==='twelve'&&!plusUnlocked){document.getElementById('pay-modal').classList.remove('hidden');return}
+  selectedMode=m
+  document.getElementById('mc-rt').className='mode-card'+(m==='realtime'?' sel-rt':'')
+  document.getElementById('mc-12').className='mode-card'+(m==='twelve'?' sel-12':'')
+  document.getElementById('radio-rt').className='mode-radio'+(m==='realtime'?' on-coral':'')
+  document.getElementById('radio-rt').innerHTML=m==='realtime'?'<div class="mode-radio-dot"></div>':''
+  document.getElementById('radio-12').className='mode-radio'+(m==='twelve'?' on-blue':'')
+  document.getElementById('radio-12').innerHTML=m==='twelve'?'<div class="mode-radio-dot"></div>':''
+}
+
+function selectCat(el,cat){
+  document.querySelectorAll('.cat-card').forEach(c=>c.classList.remove('selected'))
+  el.classList.add('selected'); selectedCat=cat
+  document.getElementById('btn-cat-cont').disabled=false
+  const q=document.getElementById('q-input')
+  if(!q.value) q.placeholder=CAT_PH[cat]||'Help me decide…'
+}
+
+function compressImage(file){
+  return new Promise(resolve=>{
+    const img=new Image(),url=URL.createObjectURL(file)
+    img.onload=()=>{
+      const MAX=900; let{width:w,height:h}=img
+      if(w>MAX||h>MAX){if(w>h){h=Math.round(h/w*MAX);w=MAX}else{w=Math.round(w/h*MAX);h=MAX}}
+      const c=document.createElement('canvas');c.width=w;c.height=h
+      c.getContext('2d').drawImage(img,0,0,w,h)
+      URL.revokeObjectURL(url);resolve(c.toDataURL('image/jpeg',.82))
+    }
+    img.src=url
+  })
+}
+
+async function handleFile(index,input){
+  const file=input.files?.[0]; if(!file) return
+  const err=document.getElementById('upload-err'); err.style.display='none'
+  if(file.size>15*1024*1024){err.textContent='Image too large (max 15 MB)';err.style.display='block';return}
+  try{
+    const data=await compressImage(file)
+    photoData[index]=data; renderSlots(); updatePostBtn()
+  }catch(e){err.textContent='Could not load image';err.style.display='block'}
+}
+
+function renderSlots(){
+  const labels=['Option A','Option B','Option C','Option D']
+  const req=[true,true,false,false]
+  document.getElementById('upload-grid').innerHTML=[0,1,2,3].map(i=>`
+    <div class="upload-slot">
+      ${photoData[i]
+        ?`<img class="upload-preview" src="${photoData[i]}">
+           <button class="upload-remove" onclick="removePhoto(${i})">
+             <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+           </button>`
+        :`<div class="upload-empty" onclick="document.getElementById('fi-${i}').click()">
+            <svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+            <span class="slot-label">${labels[i]}</span>
+            ${req[i]?'<span class="slot-req">Required</span>':''}
+          </div>`}
+    </div>`).join('')
+}
+
+function removePhoto(i){
+  photoData[i]=null
+  const f=document.getElementById('fi-'+i);if(f)f.value=''
+  renderSlots(); updatePostBtn()
+}
+
+function updatePostBtn(){
+  document.getElementById('btn-post').disabled=!(photoData[0]&&photoData[1])
+}
+
+async function submitPost(){
+  const session=getSession(); if(!session){go('login');return}
+  const btn=document.getElementById('btn-post')
+  btn.innerHTML='<div class="spinner"></div> Posting…'; btn.disabled=true
+  try{
+    const exp=new Date()
+    if(selectedMode==='realtime') exp.setMinutes(exp.getMinutes()+15)
+    else exp.setHours(exp.getHours()+12)
+    const options=photoData.filter(Boolean).map((url,i)=>({
+      id:crypto.randomUUID(),label:'Option '+String.fromCharCode(65+i),photo_url:url,vote_count:0
+    }))
+    const post={
+      id:crypto.randomUUID(),username:session.username,mode:selectedMode,
+      category:selectedCat||'other',
+      question:document.getElementById('q-input').value.trim()||CAT_PH[selectedCat]||'Help me decide…',
+      status:'active',expires_at:exp.toISOString(),created_at:new Date().toISOString(),
+      options,
+      ai_verdicts:[{recommendation_option_id:options[0]?.id,insights:[{text:'Based on current trends in this category'}]}]
+    }
+    const posts=getPosts(); posts.unshift(post); savePosts(posts)
+    if(selectedMode==='realtime') setTimeout(()=>{
+      const all=getPosts(),p=all.find(x=>x.id===post.id)
+      if(p&&p.status==='active'){p.status='closed';savePosts(all)}
+    },15*60*1000)
+    go('feed'); showToast('Post is live!')
+  }finally{
+    btn.innerHTML='Post · starts now'; btn.disabled=false
+  }
+}
+
+// ── Profile ───────────────────────────────────────────────────
+function renderProfile(){
+  const session=getSession()
+  const body=document.getElementById('profile-body')
+  if(!session){
+    document.getElementById('signout-btn').style.display='none'
+    body.innerHTML=`<div class="empty-state"><div class="emoji">👤</div><p>Sign in to see your profile and create posts</p><br><button class="btn-primary" style="width:auto;padding:10px 24px" onclick="go('login')">Sign in</button><br><br><div style="font-size:13px;color:var(--text2);margin-top:8px">No account? <a onclick="go('register')" style="color:var(--primary);cursor:pointer;font-weight:600">Create one free</a></div></div>`
+    return
+  }
+  document.getElementById('signout-btn').style.display='flex'
+  const myPosts=getPosts().filter(p=>p.username===session.username)
+  const active=myPosts.filter(p=>p.status==='active')
+  const closed=myPosts.filter(p=>p.status==='closed')
+
+  body.innerHTML=`
+    <div class="profile-header">
+      <div class="profile-avatar">${session.username[0].toUpperCase()}</div>
+      <div>
+        <div class="profile-name">@${esc(session.username)}</div>
+        <div class="plan-badge">Free plan</div>
+      </div>
+    </div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num">${myPosts.length}</div><div class="stat-lbl">Total posts</div></div>
+      <div class="stat-card"><div class="stat-num">${active.length}</div><div class="stat-lbl">Active</div></div>
+      <div class="stat-card"><div class="stat-num">${closed.length}</div><div class="stat-lbl">Closed</div></div>
+    </div>
+    ${myPosts.length===0
+      ?`<div class="empty-state"><div class="emoji">🔀</div><p>No posts yet — tap the + button to create your first one</p></div>`
+      :`${active.length?`<div class="section-title">Active</div><div class="post-thumb-grid">${active.map(t=>thumbHTML(t)).join('')}</div>`:''}`
+       +`${closed.length?`<div class="section-title" style="margin-top:${active.length?'16px':'0'}">Closed</div><div class="post-thumb-grid">${closed.map(t=>thumbHTML(t,true)).join('')}</div>`:''}`
+    }`
+}
+
+function thumbHTML(p,closed=false){
+  const cover=(p.options||[])[0]?.photo_url||''
+  const total=tvotes(p)
+  const winner=closed?(p.options||[]).reduce((mx,o)=>(!mx||o.vote_count>mx.vote_count?o:mx),null):null
+  return `<div class="post-thumb">
+    <img src="${cover}" loading="lazy" onerror="this.src='https://picsum.photos/seed/${p.id}/300'">
+    ${winner?`<div style="position:absolute;top:6px;left:6px;background:#0F6E56;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700;color:#fff">✓ ${esc(winner.label)}</div>`:''}
+    <div class="post-thumb-overlay">
+      <div class="post-thumb-q">${esc(p.question)}</div>
+      <div class="post-thumb-v">${total} votes</div>
+    </div>
+  </div>`
+}
+
+// ── Feed chip ─────────────────────────────────────────────────
+function updateFeedChip(){
+  const s=getSession()
+  document.getElementById('feed-chip').innerHTML=s
+    ?`<div onclick="go('profile')" style="display:flex;align-items:center;gap:6px;cursor:pointer">
+        <div class="avatar" style="width:28px;height:28px;font-size:12px">${s.username[0].toUpperCase()}</div>
+        <span style="font-size:13px;font-weight:600;color:var(--primary)">@${esc(s.username)}</span>
+      </div>`
+    :`<button onclick="go('login')" style="background:var(--primary);color:#fff;border:none;cursor:pointer;padding:7px 14px;border-radius:8px;font-size:13px;font-weight:700">Sign in</button>`
+}
+
+// ── Payment ───────────────────────────────────────────────────
+function closePayModal(){document.getElementById('pay-modal').classList.add('hidden')}
+function simulatePurchase(){
+  plusUnlocked=true; selectMode('twelve'); closePayModal(); showToast('Plus unlocked!')
+}
+
+// ── Toast ─────────────────────────────────────────────────────
+function showToast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg
+  t.classList.add('show'); clearTimeout(t._t)
+  t._t=setTimeout(()=>t.classList.remove('show'),2600)
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s||'';return d.innerHTML}
+
+// ── Init ──────────────────────────────────────────────────────
+initSeedData()
+updateFeedChip()
+renderFeed()
+renderSlots()
+</script>
+</body>
+</html>
