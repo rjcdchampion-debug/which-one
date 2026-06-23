@@ -8,6 +8,7 @@ const postsRouter = require('./routes/posts')
 const votesRouter = require('./routes/votes')
 const usersRouter = require('./routes/users')
 const seedRouter  = require('./routes/seed')
+const { ensureMinimumPosts } = require('./seed-posts')
 
 const app  = express()
 const PORT = process.env.PORT || 4000
@@ -56,6 +57,19 @@ async function expirePostsJob() {
 
 setInterval(expirePostsJob, 60_000)
 expirePostsJob() // run once on startup
+
+// ── Seed posts background job ──────────────────────────────────────────────────
+
+async function seedPostsJob() {
+  try {
+    await ensureMinimumPosts(10)
+  } catch (err) {
+    console.error('[seed job]', err.message)
+  }
+}
+
+setInterval(seedPostsJob, 20 * 60 * 1000) // every 20 minutes
+seedPostsJob() // run once on startup
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 

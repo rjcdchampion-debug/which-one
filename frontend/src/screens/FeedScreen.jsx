@@ -154,20 +154,22 @@ export default function FeedScreen() {
 
         {/* Category filter — hidden on Mine tab */}
         {tab !== 'mine' && (
-          <div className="flex overflow-x-auto scrollbar-hide px-4 py-2 gap-2">
-            {CAT_FILTERS.map(c => (
-              <button
-                key={c.id}
-                onClick={() => setCatFilter(c.id)}
-                className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
-                style={{
-                  background: catFilter === c.id ? '#534AB7' : '#F0F0F0',
-                  color:      catFilter === c.id ? '#FFFFFF' : '#6B6B6B',
-                }}
-              >
-                {c.label}
-              </button>
-            ))}
+          <div className="flex justify-center">
+            <div className="w-full max-w-app flex overflow-x-auto scrollbar-hide px-4 py-2 gap-2">
+              {CAT_FILTERS.map(c => (
+                <button
+                  key={c.id}
+                  onClick={() => setCatFilter(c.id)}
+                  className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
+                  style={{
+                    background: catFilter === c.id ? '#534AB7' : '#F0F0F0',
+                    color:      catFilter === c.id ? '#FFFFFF' : '#6B6B6B',
+                  }}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </header>
