@@ -82,16 +82,19 @@ export default function FeedScreen() {
   const filterByCat = (arr) =>
     catFilter === 'all' ? arr : arr.filter(p => p.category === catFilter)
 
-  const realtimePosts = filterByCat(
-    posts
-      .filter(p => p.mode === 'realtime' && p.status === 'active')
-      .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
-      .slice(0, 3)
-  )
+  // Filter by category FIRST, then get top 3 realtime posts for live strip
+  const realtimePostsUnfiltered = posts
+    .filter(p => p.mode === 'realtime' && p.status === 'active')
+    .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
 
+  const realtimePosts = filterByCat(realtimePostsUnfiltered).slice(0, 3)
+
+  // Main feed: exclude the live posts when not on live tab
   const mainPosts = filterByCat(
-    posts
-      .filter(p => tab === 'live' || !(p.mode === 'realtime' && realtimePosts.includes(p)))
+    posts.filter(p => {
+      if (tab === 'live') return p.mode === 'realtime' && p.status === 'active'
+      return !realtimePosts.includes(p)
+    })
       .sort((a, b) => {
         const aV = (a.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
         const bV = (b.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
