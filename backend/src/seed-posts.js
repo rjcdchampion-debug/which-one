@@ -19,6 +19,10 @@ const SEED_TEMPLATES = [
     images: [
       'https://picsum.photos/seed/fashion_a/400/400',
       'https://picsum.photos/seed/fashion_b/400/400',
+      'https://picsum.photos/seed/fashion_c/400/400',
+      'https://picsum.photos/seed/fashion_d/400/400',
+      'https://picsum.photos/seed/fashion_e/400/400',
+      'https://picsum.photos/seed/fashion_f/400/400',
     ],
   },
   {
@@ -33,6 +37,10 @@ const SEED_TEMPLATES = [
     images: [
       'https://picsum.photos/seed/food_a/400/400',
       'https://picsum.photos/seed/food_b/400/400',
+      'https://picsum.photos/seed/food_c/400/400',
+      'https://picsum.photos/seed/food_d/400/400',
+      'https://picsum.photos/seed/food_e/400/400',
+      'https://picsum.photos/seed/food_f/400/400',
     ],
   },
   {
@@ -47,6 +55,10 @@ const SEED_TEMPLATES = [
     images: [
       'https://picsum.photos/seed/home_a/400/400',
       'https://picsum.photos/seed/home_b/400/400',
+      'https://picsum.photos/seed/home_c/400/400',
+      'https://picsum.photos/seed/home_d/400/400',
+      'https://picsum.photos/seed/home_e/400/400',
+      'https://picsum.photos/seed/home_f/400/400',
     ],
   },
   {
@@ -61,6 +73,10 @@ const SEED_TEMPLATES = [
     images: [
       'https://picsum.photos/seed/design_a/400/400',
       'https://picsum.photos/seed/design_b/400/400',
+      'https://picsum.photos/seed/design_c/400/400',
+      'https://picsum.photos/seed/design_d/400/400',
+      'https://picsum.photos/seed/design_e/400/400',
+      'https://picsum.photos/seed/design_f/400/400',
     ],
   },
   {
@@ -75,6 +91,10 @@ const SEED_TEMPLATES = [
     images: [
       'https://picsum.photos/seed/beauty_a/400/400',
       'https://picsum.photos/seed/beauty_b/400/400',
+      'https://picsum.photos/seed/beauty_c/400/400',
+      'https://picsum.photos/seed/beauty_d/400/400',
+      'https://picsum.photos/seed/beauty_e/400/400',
+      'https://picsum.photos/seed/beauty_f/400/400',
     ],
   },
 ]
@@ -89,6 +109,11 @@ function getRandomUsername() {
 
 function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
+function getRandomImages(imageArray, count = 2) {
+  const shuffled = [...imageArray].sort(() => Math.random() - 0.5)
+  return shuffled.slice(0, count)
 }
 
 function getRandomVoteCount() {
@@ -147,8 +172,8 @@ async function generateSeedPosts(count = 3) {
       continue
     }
 
-    // Create 2 options with realistic vote counts
-    const [url1, url2] = template.images
+    // Create 2 options with random images (no repeats)
+    const [url1, url2] = getRandomImages(template.images, 2)
     const optionData = [
       { post_id: post.id, label: 'Option A', photo_url: url1, vote_count: getRandomVoteCount() },
       { post_id: post.id, label: 'Option B', photo_url: url2, vote_count: getRandomVoteCount() },
@@ -245,7 +270,7 @@ async function ensureMinimumPosts(minCount = 10) {
 
       if (!post) continue
 
-      const [url1, url2] = template.images
+      const [url1, url2] = getRandomImages(template.images, 2)
       const optionData = [
         { post_id: post.id, label: 'Option A', photo_url: url1, vote_count: getRandomVoteCount() },
         { post_id: post.id, label: 'Option B', photo_url: url2, vote_count: getRandomVoteCount() },
