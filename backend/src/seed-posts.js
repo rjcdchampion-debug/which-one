@@ -17,8 +17,8 @@ const SEED_TEMPLATES = [
       'Summer dress vibes — which one?',
     ],
     images: [
-      'https://source.unsplash.com/400x400/?fashion,outfit',
-      'https://source.unsplash.com/400x400/?dress',
+      'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?w=400&h=400&fit=crop',
     ],
   },
   {
@@ -31,8 +31,8 @@ const SEED_TEMPLATES = [
       'Coffee or tea?',
     ],
     images: [
-      'https://source.unsplash.com/400x400/?food,restaurant',
-      'https://source.unsplash.com/400x400/?cuisine',
+      'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1495521821757-a1efb6729352?w=400&h=400&fit=crop',
     ],
   },
   {
@@ -45,8 +45,8 @@ const SEED_TEMPLATES = [
       'Sofa placement — which layout?',
     ],
     images: [
-      'https://source.unsplash.com/400x400/?interior,home',
-      'https://source.unsplash.com/400x400/?furniture',
+      'https://images.unsplash.com/photo-1565183966519-514a57ba0565?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=400&h=400&fit=crop',
     ],
   },
   {
@@ -59,8 +59,8 @@ const SEED_TEMPLATES = [
       'Which colour scheme?',
     ],
     images: [
-      'https://source.unsplash.com/400x400/?design,graphics',
-      'https://source.unsplash.com/400x400/?digital,art',
+      'https://images.unsplash.com/photo-1561070791-2526d30994b5?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1561542590-2c4e126ce0f9?w=400&h=400&fit=crop',
     ],
   },
   {
@@ -73,8 +73,8 @@ const SEED_TEMPLATES = [
       'Summer glow or matte finish?',
     ],
     images: [
-      'https://source.unsplash.com/400x400/?beauty,makeup',
-      'https://source.unsplash.com/400x400/?skincare',
+      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop',
+      'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=400&fit=crop',
     ],
   },
 ]
