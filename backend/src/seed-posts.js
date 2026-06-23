@@ -17,8 +17,8 @@ const SEED_TEMPLATES = [
       'Summer dress vibes — which one?',
     ],
     images: [
-      'https://picsum.photos/400/400?random=fashion1',
-      'https://picsum.photos/400/400?random=fashion2',
+      'https://picsum.photos/seed/fashion_a/400/400',
+      'https://picsum.photos/seed/fashion_b/400/400',
     ],
   },
   {
@@ -31,8 +31,8 @@ const SEED_TEMPLATES = [
       'Coffee or tea?',
     ],
     images: [
-      'https://picsum.photos/400/400?random=food1',
-      'https://picsum.photos/400/400?random=food2',
+      'https://picsum.photos/seed/food_a/400/400',
+      'https://picsum.photos/seed/food_b/400/400',
     ],
   },
   {
@@ -45,8 +45,8 @@ const SEED_TEMPLATES = [
       'Sofa placement — which layout?',
     ],
     images: [
-      'https://picsum.photos/400/400?random=home1',
-      'https://picsum.photos/400/400?random=home2',
+      'https://picsum.photos/seed/home_a/400/400',
+      'https://picsum.photos/seed/home_b/400/400',
     ],
   },
   {
@@ -59,8 +59,8 @@ const SEED_TEMPLATES = [
       'Which colour scheme?',
     ],
     images: [
-      'https://picsum.photos/400/400?random=design1',
-      'https://picsum.photos/400/400?random=design2',
+      'https://picsum.photos/seed/design_a/400/400',
+      'https://picsum.photos/seed/design_b/400/400',
     ],
   },
   {
@@ -73,8 +73,8 @@ const SEED_TEMPLATES = [
       'Summer glow or matte finish?',
     ],
     images: [
-      'https://picsum.photos/400/400?random=beauty1',
-      'https://picsum.photos/400/400?random=beauty2',
+      'https://picsum.photos/seed/beauty_a/400/400',
+      'https://picsum.photos/seed/beauty_b/400/400',
     ],
   },
 ]
