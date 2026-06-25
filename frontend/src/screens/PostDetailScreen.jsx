@@ -14,9 +14,10 @@ export default function PostDetailScreen() {
   const { user }    = useAuth()
   const { hasPurchased, simulatePurchase } = usePurchases()
 
-  const [post, setPost]         = useState(null)
-  const [loading, setLoading]   = useState(true)
+  const [post, setPost]               = useState(null)
+  const [loading, setLoading]         = useState(true)
   const [showPayModal, setShowPayModal] = useState(false)
+  const [showGuestBanner, setShowGuestBanner] = useState(false)
 
   const purchased = hasPurchased(`ai_verdict_${id}`)
 
@@ -41,6 +42,10 @@ export default function PostDetailScreen() {
     return () => supabase.removeChannel(channel)
   }, [id])
 
+  function handleVote() {
+    if (!user) setShowGuestBanner(true)
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full bg-[#F5F5F5]">
@@ -64,9 +69,9 @@ export default function PostDetailScreen() {
     )
   }
 
-  const verdict  = post.ai_verdicts?.[0]
-  const options  = post.options || []
-  const is12h    = post.mode === 'twelve_hour'
+  const verdict    = post.ai_verdicts?.[0]
+  const options    = post.options || []
+  const is12h      = post.mode === 'twelve_hour'
   const hasVerdict = verdict && purchased
 
   return (
@@ -86,7 +91,7 @@ export default function PostDetailScreen() {
 
         <main className="flex justify-center">
           <div className="w-full max-w-app px-4 pt-4 pb-28 space-y-4">
-            <PostCard post={post} currentUserId={user?.id} />
+            <PostCard post={post} currentUserId={user?.id} onVote={handleVote} />
 
             {/* AI Deep-dive — 12h posts only */}
             {is12h && (
@@ -120,6 +125,25 @@ export default function PostDetailScreen() {
                 <p className="text-sm text-center">Be the first to comment — coming soon</p>
               </div>
             </div>
+
+            {/* Guest CTA — shown after voting without an account */}
+            {showGuestBanner && (
+              <div
+                className="flex items-center justify-between gap-3 bg-white border border-[#E5E5E5] rounded-card px-4 py-3"
+                style={{ borderWidth: '0.5px' }}
+              >
+                <p className="text-sm text-[#6B6B6B] leading-snug">
+                  Enjoying This or That?{' '}
+                  <span className="text-[#1A1A1A] font-medium">Post your own decision — it's free</span>
+                </p>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="shrink-0 px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-btn"
+                >
+                  Sign up
+                </button>
+              </div>
+            )}
           </div>
         </main>
       </div>

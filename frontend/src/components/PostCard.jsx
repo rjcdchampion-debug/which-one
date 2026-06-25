@@ -44,7 +44,7 @@ function hoursLeft(expiresAt) {
   return `${Math.floor(hrs)}h left`
 }
 
-export default function PostCard({ post: initialPost, currentUserId, compact = false }) {
+export default function PostCard({ post: initialPost, currentUserId, compact = false, onVote }) {
   const navigate   = useNavigate()
   const { session } = useAuth()
   const { voterId, hasVoted, getVotedOption, recordVote } = useVoter()
@@ -92,6 +92,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
       recordVote(post.id, optionId)
       setVoted(true)
       setVotedOptionId(optionId)
+      onVote?.()
       if (updated?.options) setPost(prev => ({ ...prev, options: updated.options }))
       else {
         setPost(prev => ({
@@ -106,6 +107,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
       recordVote(post.id, optionId)
       setVoted(true)
       setVotedOptionId(optionId)
+      onVote?.()
       setPost(prev => ({
         ...prev,
         options: prev.options.map(o =>
