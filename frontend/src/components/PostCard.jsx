@@ -119,6 +119,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
 
   async function handleShare() {
     const url = `${window.location.origin}/post/${post.id}`
+    const shareText = `${post.question} — vote now on This or That! 👇 ${url}`
 
     // Fire-and-forget share count increment
     api.incrementShare(post.id)
@@ -127,15 +128,14 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: post.question, url })
+        await navigator.share({ title: post.question, text: shareText })
       } catch {}
     } else {
       try {
-        await navigator.clipboard.writeText(url)
+        await navigator.clipboard.writeText(shareText)
       } catch {
-        // Fallback for browsers without clipboard API
         const el = document.createElement('textarea')
-        el.value = url
+        el.value = shareText
         document.body.appendChild(el)
         el.select()
         document.execCommand('copy')
