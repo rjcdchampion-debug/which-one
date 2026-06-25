@@ -189,7 +189,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
 
         {/* Photos — unified grid; 'or' pill at exact centre for all option counts */}
         <div className="px-4 pb-4">
-          <div className="relative">
+          <div className="relative" style={{ isolation: 'isolate' }}>
             <div className="grid grid-cols-2 gap-2">
               {options.slice(0, 4).map((option) => {
                 const pct = totalVotes > 0 ? Math.round((humanCount(option) / totalVotes) * 100) : 0
@@ -238,11 +238,12 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
 
             {/* 'or' pill — centred between 2 images, or at the 4-corner crosshair for 3–4 images */}
             {!showResults && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                <span className="bg-white border border-[#E5E5E5] rounded-full px-2.5 py-1 text-xs font-semibold text-[#1A1A1A] shadow-sm">
-                  or
-                </span>
-              </div>
+              <span
+                className="absolute bg-white border border-[#E5E5E5] rounded-full px-2.5 py-1 text-xs font-semibold text-[#1A1A1A] shadow-sm pointer-events-none"
+                style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 50 }}
+              >
+                or
+              </span>
             )}
           </div>
         </div>
@@ -271,10 +272,11 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           <div className="relative">
             <button
               onClick={handleShare}
-              className="flex items-center gap-1.5 text-[#6B6B6B] text-sm"
+              className="flex items-center gap-1.5 text-sm font-semibold"
+              style={{ color: '#534AB7' }}
             >
-              <Forward size={16} />
-              {shareCount > 0 && <span>{shareCount}</span>}
+              <Forward size={20} />
+              <span>Share{shareCount > 0 ? ` · ${shareCount}` : ''}</span>
             </button>
             {shareCopied && (
               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#1A1A1A] text-white text-[11px] font-medium rounded-md whitespace-nowrap pointer-events-none">
