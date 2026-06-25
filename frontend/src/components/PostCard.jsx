@@ -121,7 +121,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
 
   async function handleShare() {
     const url = `${window.location.origin}/post/${post.id}`
-    const shareText = `${post.question} — vote now on This or That! 👇 ${url}`
+    const shareText = `${post.question} — vote now on This or That! 👇\n\n${url}`
 
     // Fire-and-forget share count increment
     api.incrementShare(post.id)
