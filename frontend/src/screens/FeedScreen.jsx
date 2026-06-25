@@ -63,7 +63,8 @@ export default function FeedScreen() {
   useEffect(() => {
     if (!SUPABASE_CONFIGURED) return
     const channel = supabase
-      .channel('feed-options')
+      .channel('feed-realtime')
+      // Vote count updates
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'options' }, (payload) => {
         setPosts(prev =>
           prev.map(post => ({
@@ -73,6 +74,23 @@ export default function FeedScreen() {
             ),
           }))
         )
+      })
+      // New post inserted — fetch full post (with options) and prepend to state
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, async (payload) => {
+        if (payload.new.mode === 'realtime' && payload.new.status === 'active') {
+          try {
+            const data = await api.getPost(payload.new.id)
+            if (data.post) {
+              setPosts(prev => prev.some(p => p.id === data.post.id) ? prev : [data.post, ...prev])
+            }
+          } catch {}
+        }
+      })
+      // Post status changes (e.g. expired → closed)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'posts' }, (payload) => {
+        setPosts(prev => prev.map(p =>
+          p.id === payload.new.id ? { ...p, status: payload.new.status, expires_at: payload.new.expires_at } : p
+        ))
       })
       .subscribe()
     channelRef.current = channel
@@ -89,16 +107,22 @@ export default function FeedScreen() {
 
   const realtimePosts = filterByCat(realtimePostsUnfiltered).slice(0, 3)
 
-  // Main feed: exclude the live posts when not on live tab
+  // Main feed: exclude the live strip posts when not on live tab
   const mainPosts = filterByCat(
     posts.filter(p => {
       if (tab === 'live') return p.mode === 'realtime' && p.status === 'active'
       return !realtimePosts.includes(p)
     })
       .sort((a, b) => {
-        const aV = (a.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
-        const bV = (b.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
-        return bV - aV
+        if (tab === 'trending') {
+          const aV = (a.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
+          const bV = (b.options || []).reduce((s, o) => s + (o.vote_count || 0), 0)
+          return bV - aV
+        }
+        if (tab === 'live') {
+          return new Date(a.expires_at) - new Date(b.expires_at)
+        }
+        return new Date(b.created_at) - new Date(a.created_at)
       })
   )
 
