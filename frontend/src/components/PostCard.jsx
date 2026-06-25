@@ -208,12 +208,24 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
                       opacity: showResults && !isWinner ? 0.72 : 1,
                     }}
                   >
-                    <img
-                      src={option.photo_url}
-                      alt={option.label}
-                      className="w-full aspect-square object-cover"
-                      loading="lazy"
-                    />
+                    {option.photo_url ? (
+                      <img
+                        src={option.photo_url}
+                        alt={option.label}
+                        className="w-full aspect-square object-cover"
+                        loading="lazy"
+                        onError={e => {
+                          e.currentTarget.style.display = 'none'
+                          e.currentTarget.nextSibling?.style && (e.currentTarget.nextSibling.style.display = 'flex')
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className="w-full aspect-square bg-[#F0F0F0] items-center justify-center text-[#6B6B6B] text-xs font-medium"
+                      style={{ display: option.photo_url ? 'none' : 'flex' }}
+                    >
+                      {option.label}
+                    </div>
                     {showResults && (
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pt-6 pb-2">
                         <div className="flex items-center justify-between">
