@@ -198,4 +198,23 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 })
 
+// ── POST /api/posts/:id/share ─────────────────────────────────────────────────
+
+router.post('/:id/share', async (req, res) => {
+  try {
+    const { data: post, error: fetchErr } = await supabase
+      .from('posts').select('share_count').eq('id', req.params.id).single()
+    if (fetchErr || !post) return res.status(404).json({ error: 'Post not found' })
+
+    const newCount = (post.share_count || 0) + 1
+    const { error } = await supabase
+      .from('posts').update({ share_count: newCount }).eq('id', req.params.id)
+    if (error) throw error
+
+    res.json({ share_count: newCount })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router

@@ -39,6 +39,9 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  incrementShare: (postId) =>
+    request(`/api/posts/${postId}/share`, { method: 'POST' }),
+
   getUserProfile: (id) =>
     request(`/api/users/${id}`),
 

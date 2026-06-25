@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Sparkles } from 'lucide-react'
+import { ChevronLeft, Sparkles, MessageCircle } from 'lucide-react'
 import PostCard from '../components/PostCard'
 import PaymentModal from '../components/PaymentModal'
 import { api } from '../lib/api'
+import { supabase } from '../lib/supabase'
 import { useAuth } from '../contexts/AuthContext'
 import { usePurchases } from '../hooks/usePurchases'
 
@@ -24,6 +25,20 @@ export default function PostDetailScreen() {
       .then(({ post }) => setPost(post))
       .catch(console.error)
       .finally(() => setLoading(false))
+  }, [id])
+
+  // Refresh post when AI verdict is inserted so the strip updates without a page reload
+  useEffect(() => {
+    const channel = supabase
+      .channel(`post-detail-${id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_verdicts', filter: `post_id=eq.${id}` }, async () => {
+        try {
+          const { post: updated } = await api.getPost(id)
+          if (updated) setPost(updated)
+        } catch {}
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
   }, [id])
 
   if (loading) {
@@ -100,9 +115,10 @@ export default function PostDetailScreen() {
             {/* Comments placeholder */}
             <div className="bg-white rounded-card border border-[#E5E5E5] p-4" style={{ borderWidth: '0.5px' }}>
               <p className="text-sm font-semibold text-[#1A1A1A] mb-3">Comments</p>
-              <p className="text-sm text-[#6B6B6B] text-center py-6">
-                Comments coming soon.
-              </p>
+              <div className="flex flex-col items-center gap-2 py-6 text-[#6B6B6B]">
+                <MessageCircle size={22} strokeWidth={1.5} />
+                <p className="text-sm text-center">Be the first to comment — coming soon</p>
+              </div>
             </div>
           </div>
         </main>

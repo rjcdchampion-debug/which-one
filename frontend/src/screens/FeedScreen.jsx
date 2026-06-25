@@ -92,6 +92,16 @@ export default function FeedScreen() {
           p.id === payload.new.id ? { ...p, status: payload.new.status, expires_at: payload.new.expires_at } : p
         ))
       })
+      // AI verdict inserted — refresh that post so the AI strip updates immediately
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_verdicts' }, async (payload) => {
+        const postId = payload.new.post_id
+        try {
+          const data = await api.getPost(postId)
+          if (data.post) {
+            setPosts(prev => prev.map(p => p.id === postId ? { ...p, ai_verdicts: data.post.ai_verdicts } : p))
+          }
+        } catch {}
+      })
       .subscribe()
     channelRef.current = channel
     return () => supabase.removeChannel(channel)

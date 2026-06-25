@@ -50,14 +50,16 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
   const { voterId, hasVoted, getVotedOption, recordVote } = useVoter()
 
   const [post, setPost]               = useState(initialPost)
-  // Initialise from localStorage to avoid flicker on mount
   const [voted, setVoted]             = useState(() => hasVoted(initialPost.id))
   const [votedOptionId, setVotedOptionId] = useState(() => getVotedOption(initialPost.id))
   const [showExtendModal, setShowExtendModal] = useState(false)
   const [voting, setVoting]           = useState(false)
+  const [shareCount, setShareCount]   = useState(initialPost.share_count || 0)
+  const [shareCopied, setShareCopied] = useState(false)
 
   useEffect(() => {
     setPost(initialPost)
+    setShareCount(initialPost.share_count || 0)
   }, [initialPost])
 
   const options   = post.options || []
@@ -68,7 +70,6 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
   const aiOptionId   = aiVerdict?.recommendation_option_id
   const aiOption     = aiOptionId ? options.find(o => o.id === aiOptionId) : null
 
-  // Exclude the AI vote from human-facing percentages and winner
   const humanCount   = (o) => o.id === aiOptionId ? Math.max(0, (o.vote_count || 0) - 1) : (o.vote_count || 0)
   const totalVotes   = options.reduce((s, o) => s + humanCount(o), 0)
   const winningId    = options.reduce((mx, o) => (!mx || humanCount(o) > humanCount(mx) ? o : mx), null)?.id
@@ -93,7 +94,6 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
       setVotedOptionId(optionId)
       if (updated?.options) setPost(prev => ({ ...prev, options: updated.options }))
       else {
-        // Optimistic update
         setPost(prev => ({
           ...prev,
           options: prev.options.map(o =>
@@ -103,7 +103,6 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
       }
     } catch (err) {
       console.warn('Vote failed:', err.message)
-      // Still record locally so UI updates
       recordVote(post.id, optionId)
       setVoted(true)
       setVotedOptionId(optionId)
@@ -118,19 +117,34 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
     }
   }
 
-  function getBorderStyle(optionId) {
-    if (!showResults) return 'border-transparent'
-    if (optionId === winningId) return 'ring-2'
-    return 'border-transparent opacity-70'
-  }
+  async function handleShare() {
+    const url = `${window.location.origin}/post/${post.id}`
 
-  function getRingColor(optionId) {
-    if (optionId === winningId) return accentColor
-    return 'transparent'
-  }
+    // Fire-and-forget share count increment
+    api.incrementShare(post.id)
+      .then(({ share_count }) => setShareCount(share_count))
+      .catch(() => setShareCount(c => c + 1))
 
-  const firstTwo  = options.slice(0, 2)
-  const extraOpts = options.slice(2)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: post.question, url })
+      } catch {}
+    } else {
+      try {
+        await navigator.clipboard.writeText(url)
+      } catch {
+        // Fallback for browsers without clipboard API
+        const el = document.createElement('textarea')
+        el.value = url
+        document.body.appendChild(el)
+        el.select()
+        document.execCommand('copy')
+        document.body.removeChild(el)
+      }
+      setShareCopied(true)
+      setTimeout(() => setShareCopied(false), 2000)
+    }
+  }
 
   return (
     <>
@@ -173,70 +187,11 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           {post.question}
         </p>
 
-        {/* Photos */}
-        <div className="px-4 pb-4 space-y-2">
-          {/* First row — always shown, carries the "or" pill */}
-          <div className="relative grid grid-cols-2 gap-2">
-            {firstTwo.map((option) => {
-              const pct = totalVotes > 0 ? Math.round((humanCount(option) / totalVotes) * 100) : 0
-              const isWinner = option.id === winningId
-              const isMyVote = option.id === votedOptionId
-              return (
-                <button
-                  key={option.id}
-                  onClick={() => handleVote(option.id)}
-                  disabled={voted || isClosed}
-                  className="relative rounded-lg overflow-hidden focus:outline-none active:scale-[0.98] transition-transform"
-                  style={{
-                    boxShadow: showResults && isWinner ? `0 0 0 2.5px ${accentColor}` : undefined,
-                    opacity: showResults && !isWinner ? 0.72 : 1,
-                  }}
-                >
-                  <img
-                    src={option.photo_url}
-                    alt={option.label}
-                    className="w-full aspect-square object-cover"
-                    loading="lazy"
-                  />
-                  {/* Result overlay */}
-                  {showResults && (
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2 pt-6 pb-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-white text-xs font-medium">{option.label}</span>
-                        <span className="text-white text-sm font-bold">{pct}%</span>
-                      </div>
-                      <div className="mt-1 h-1 rounded-full bg-white/30">
-                        <div
-                          className="h-full rounded-full transition-all duration-700"
-                          style={{ width: `${pct}%`, background: isWinner ? accentColor : 'white' }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {/* "My vote" badge */}
-                  {isMyVote && (
-                    <div className="absolute top-2 right-2 bg-white/90 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-[#534AB7]">
-                      Your vote
-                    </div>
-                  )}
-                </button>
-              )
-            })}
-
-            {/* "or" pill */}
-            {!showResults && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <span className="bg-white border border-[#E5E5E5] rounded-full px-2.5 py-1 text-xs font-semibold text-[#1A1A1A] shadow-sm">
-                  or
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Extra options (3rd / 4th) */}
-          {extraOpts.length > 0 && (
+        {/* Photos — unified grid; 'or' pill at exact centre for all option counts */}
+        <div className="px-4 pb-4">
+          <div className="relative">
             <div className="grid grid-cols-2 gap-2">
-              {extraOpts.map((option) => {
+              {options.slice(0, 4).map((option) => {
                 const pct = totalVotes > 0 ? Math.round((humanCount(option) / totalVotes) * 100) : 0
                 const isWinner = option.id === winningId
                 const isMyVote = option.id === votedOptionId
@@ -280,7 +235,16 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
                 )
               })}
             </div>
-          )}
+
+            {/* 'or' pill — centred between 2 images, or at the 4-corner crosshair for 3–4 images */}
+            {!showResults && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                <span className="bg-white border border-[#E5E5E5] rounded-full px-2.5 py-1 text-xs font-semibold text-[#1A1A1A] shadow-sm">
+                  or
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* AI verdict strip */}
@@ -303,9 +267,22 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
             <MessageCircle size={16} />
             <span>{post.comment_count || 0}</span>
           </button>
-          <button className="flex items-center gap-1.5 text-[#6B6B6B] text-sm">
-            <Share2 size={16} />
-          </button>
+
+          <div className="relative">
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 text-[#6B6B6B] text-sm"
+            >
+              <Share2 size={16} />
+              {shareCount > 0 && <span>{shareCount}</span>}
+            </button>
+            {shareCopied && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-[#1A1A1A] text-white text-[11px] font-medium rounded-md whitespace-nowrap pointer-events-none">
+                Link copied!
+              </div>
+            )}
+          </div>
+
           <span className="ml-auto text-xs text-[#6B6B6B]">
             {totalVotes} vote{totalVotes !== 1 ? 's' : ''}
           </span>
@@ -329,7 +306,6 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           onClose={() => setShowExtendModal(false)}
           onPurchase={() => {
             setShowExtendModal(false)
-            // In a real app: call the backend to extend expires_at
             alert('Timer extended by 15 minutes!')
           }}
         />
