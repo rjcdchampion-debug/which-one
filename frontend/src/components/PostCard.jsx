@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MessageCircle, Share2, Zap } from 'lucide-react'
+import { MessageCircle, Forward, Zap } from 'lucide-react'
 import TimerRing from './TimerRing'
 import PaymentModal from './PaymentModal'
 import { useAuth } from '../contexts/AuthContext'
@@ -273,7 +273,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
               onClick={handleShare}
               className="flex items-center gap-1.5 text-[#6B6B6B] text-sm"
             >
-              <Share2 size={16} />
+              <Forward size={16} />
               {shareCount > 0 && <span>{shareCount}</span>}
             </button>
             {shareCopied && (
