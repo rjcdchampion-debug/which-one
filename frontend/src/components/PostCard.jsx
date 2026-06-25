@@ -191,7 +191,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
 
         {/* Photos — unified grid; 'or' pill at exact centre for all option counts */}
         <div className="px-4 pb-4">
-          <div className="relative" style={{ isolation: 'isolate' }}>
+          <div className="relative">
             <div className="grid grid-cols-2 gap-2">
               {options.slice(0, 4).map((option) => {
                 const pct = totalVotes > 0 ? Math.round((humanCount(option) / totalVotes) * 100) : 0
@@ -202,7 +202,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
                     key={option.id}
                     onClick={() => handleVote(option.id)}
                     disabled={voted || isClosed}
-                    className="relative rounded-lg overflow-hidden focus:outline-none active:scale-[0.98] transition-transform"
+                    className="relative rounded-lg overflow-hidden focus:outline-none active:opacity-80 transition-opacity"
                     style={{
                       boxShadow: showResults && isWinner ? `0 0 0 2.5px ${accentColor}` : undefined,
                       opacity: showResults && !isWinner ? 0.72 : 1,
