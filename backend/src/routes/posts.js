@@ -89,7 +89,10 @@ router.get('/', async (req, res) => {
     const { tab = 'foryou' } = req.query
     let query = supabase.from('posts').select('*').eq('status', 'active')
 
-    if (tab === 'trending') {
+    if (tab === 'live') {
+      // Only active realtime posts, ordered most-urgent first
+      query = query.eq('mode', 'realtime')
+    } else if (tab === 'trending') {
       // Sort by vote total — done client side after enrichment
     } else if (tab === 'mine') {
       const token = req.headers.authorization?.split(' ')[1]
@@ -103,7 +106,9 @@ router.get('/', async (req, res) => {
       query = supabase.from('posts').select('*').eq('user_id', userId)
     }
 
-    const { data: posts, error } = await query.order('created_at', { ascending: false }).limit(50)
+    const orderCol = tab === 'live' ? 'expires_at' : 'created_at'
+    const orderAsc = tab === 'live'
+    const { data: posts, error } = await query.order(orderCol, { ascending: orderAsc }).limit(50)
     if (error) throw error
 
     const enriched = await enrichPosts(posts || [])

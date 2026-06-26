@@ -44,11 +44,9 @@ export default function FeedScreen() {
   async function loadFeed() {
     setLoading(true)
     try {
-      const queryTab = tab === 'live' ? 'foryou' : tab
       const token = tab === 'mine' ? session?.access_token : undefined
-      const data = await api.getFeed(queryTab, token)
-      let fetched = data.posts || []
-      if (tab === 'live') fetched = fetched.filter(p => p.mode === 'realtime' && p.status === 'active')
+      const data = await api.getFeed(tab, token)
+      const fetched = data.posts || []
       setPosts(fetched)
     } catch {
       setPosts(MOCK_POSTS)
