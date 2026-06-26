@@ -104,12 +104,15 @@ export default function PostCard({
 
   function startForYouAnimation(postId) {
     onVoteStart?.(postId)
+    // Wait 500ms for vote bars to animate in, then show the message overlay.
+    // The overlay runs a CSS animation: 0.4s fade-in → 2s hold → 0.4s fade-out = 2.8s total.
     addTimeout(() => {
       setShowVoteMessage(true)
       addTimeout(() => {
+        setShowVoteMessage(false)
         onVoteAnimationComplete?.(postId)
-      }, 1000)
-    }, 1500)
+      }, 2800)
+    }, 500)
   }
 
   async function handleVote(optionId) {
@@ -339,11 +342,11 @@ export default function PostCard({
           )}
         </div>
 
-        {/* Vote-logged overlay — fades in after 1.5s in For You */}
+        {/* Vote-logged overlay — fades in/out via voteMsgCycle keyframe */}
         {showVoteMessage && (
           <div
             className="absolute inset-0 flex items-center justify-center z-30"
-            style={{ animation: 'fadeIn 0.3s ease forwards' }}
+            style={{ animation: 'voteMsgCycle 2.8s ease forwards' }}
           >
             <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.88)' }} />
             <div className="relative px-6 py-4 bg-[#534AB7] rounded-2xl shadow-xl text-center">

@@ -139,21 +139,26 @@ export default function FeedScreen() {
   function handleVoteAnimationComplete(postId) {
     setAnimatingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
     setCollapsingPostIds(prev => new Set([...prev, postId]))
-    // After CSS transition, hasVoted filter naturally excludes the post
+    // After CSS transition (0.8s), hasVoted filter naturally excludes the post
     const tid = setTimeout(() => {
       setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       delete collapseTimersRef.current[postId]
-    }, 700)
+    }, 900)
     collapseTimersRef.current[postId] = tid
   }
 
   const filterByCat = (arr) =>
     catFilter === 'all' ? arr : arr.filter(p => p.category === catFilter)
 
-  // Live strip: top 3 urgency-sorted realtime posts
+  // Live strip: top 3 urgency-sorted realtime posts.
+  // On For You tab, exclude posts the logged-in user already voted on.
   const realtimePosts = filterByCat(
     posts
-      .filter(p => p.mode === 'realtime' && p.status === 'active')
+      .filter(p => {
+        if (!(p.mode === 'realtime' && p.status === 'active')) return false
+        if (tab === 'foryou' && user && hasVoted(p.id)) return false
+        return true
+      })
       .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
   ).slice(0, 3)
 
@@ -334,7 +339,7 @@ export default function FeedScreen() {
                           overflow:     'hidden',
                           marginBottom: isCollapsing ? -12 : undefined,
                           transition:   isCollapsing
-                            ? 'max-height 0.6s ease-in, opacity 0.4s ease, margin-bottom 0.6s ease'
+                            ? 'max-height 0.8s ease-in, opacity 0.5s ease, margin-bottom 0.8s ease'
                             : undefined,
                         }}
                       >

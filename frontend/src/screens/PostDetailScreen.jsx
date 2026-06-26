@@ -80,11 +80,11 @@ export default function PostDetailScreen() {
         {/* Header */}
         <header className="sticky top-0 z-20 bg-white border-b border-[#E5E5E5]" style={{ borderBottomWidth: '0.5px' }}>
           <div className="flex justify-center">
-            <div className="w-full max-w-app px-4 h-14 flex items-center gap-3">
-              <button onClick={() => navigate(-1)} className="p-1 -ml-1">
-                <ChevronLeft size={22} className="text-[#1A1A1A]" />
+            <div className="w-full max-w-app px-4 h-14 flex items-center">
+              <button onClick={() => navigate(-1)} className="p-1 -ml-1 flex items-center gap-1 text-[#534AB7]">
+                <ChevronLeft size={22} />
+                <span className="text-sm font-semibold">Back</span>
               </button>
-              <h2 className="font-semibold text-[#1A1A1A] flex-1 truncate">Post</h2>
             </div>
           </div>
         </header>

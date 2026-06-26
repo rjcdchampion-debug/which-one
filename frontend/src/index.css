@@ -51,6 +51,14 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* Vote-logged message overlay: fade in → hold → fade out */
+@keyframes voteMsgCycle {
+  0%     { opacity: 0; }
+  14.3%  { opacity: 1; }
+  85.7%  { opacity: 1; }
+  100%   { opacity: 0; }
+}
+
 @layer utilities {
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
