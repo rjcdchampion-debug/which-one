@@ -42,6 +42,9 @@ export const api = {
   incrementShare: (postId) =>
     request(`/api/posts/${postId}/share`, { method: 'POST' }),
 
+  getMyVotes: (token) =>
+    request('/api/votes/mine', { headers: authHeaders(token) }),
+
   getUserProfile: (id) =>
     request(`/api/users/${id}`),
 

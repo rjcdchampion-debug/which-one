@@ -3,6 +3,103 @@ const { supabase } = require('../supabaseClient')
 
 const router = express.Router()
 
+function groupBy(arr, key) {
+  return arr.reduce((acc, item) => {
+    const k = item[key];
+    (acc[k] = acc[k] || []).push(item)
+    return acc
+  }, {})
+}
+function indexBy(arr, key) {
+  return arr.reduce((acc, item) => { acc[item[key]] = item; return acc }, {})
+}
+
+// GET /api/votes/mine — returns posts the current user voted on, newest first
+router.get('/mine', async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1]
+    if (!token) return res.status(401).json({ error: 'Auth required' })
+
+    let userId
+    try {
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'))
+      userId = payload.sub
+    } catch {
+      return res.status(401).json({ error: 'Invalid token' })
+    }
+
+    const { data: votes, error: votesErr } = await supabase
+      .from('votes')
+      .select('post_id, option_id, created_at')
+      .eq('voter_id', userId)
+      .eq('voter_type', 'human')
+      .order('created_at', { ascending: false })
+
+    if (votesErr) throw votesErr
+    if (!votes?.length) return res.json({ votes: [], stats: { total: 0, majorityAgreePercent: 0 } })
+
+    // Deduplicate post IDs (preserve order — newest vote first)
+    const seen = new Set()
+    const postIds = []
+    const voteByPost = {}
+    for (const v of votes) {
+      if (!seen.has(v.post_id)) {
+        seen.add(v.post_id)
+        postIds.push(v.post_id)
+        voteByPost[v.post_id] = v
+      }
+    }
+
+    const { data: posts } = await supabase.from('posts').select('*').in('id', postIds)
+    if (!posts?.length) return res.json({ votes: [], stats: { total: 0, majorityAgreePercent: 0 } })
+
+    const [{ data: options }, { data: users }, { data: verdicts }] = await Promise.all([
+      supabase.from('options').select('*').in('post_id', postIds),
+      supabase.from('users').select('id, username, avatar_url').in('id', posts.map(p => p.user_id)),
+      supabase.from('ai_verdicts').select('*').in('post_id', postIds),
+    ])
+
+    const optionsByPost  = groupBy(options || [], 'post_id')
+    const usersById      = indexBy(users || [], 'id')
+    const verdictsByPost = groupBy(verdicts || [], 'post_id')
+    const postsById      = indexBy(posts, 'id')
+
+    const result = postIds
+      .map(id => {
+        const p = postsById[id]
+        if (!p) return null
+        return {
+          ...p,
+          options:         optionsByPost[id]  || [],
+          users:           usersById[p.user_id] || null,
+          ai_verdicts:     verdictsByPost[id] || [],
+          voted_option_id: voteByPost[id].option_id,
+          vote_created_at: voteByPost[id].created_at,
+        }
+      })
+      .filter(Boolean)
+
+    let agreedCount = 0
+    result.forEach(item => {
+      const opts  = item.options || []
+      const total = opts.reduce((s, o) => s + (o.vote_count || 0), 0)
+      if (!total) return
+      const winner = opts.reduce((mx, o) => (!mx || o.vote_count > mx.vote_count ? o : mx), null)
+      if (winner?.id === item.voted_option_id) agreedCount++
+    })
+
+    res.json({
+      votes: result,
+      stats: {
+        total: result.length,
+        majorityAgreePercent: result.length ? Math.round((agreedCount / result.length) * 100) : 0,
+      },
+    })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 // POST /api/votes
 router.post('/', async (req, res) => {
   try {

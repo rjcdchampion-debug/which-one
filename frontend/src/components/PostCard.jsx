@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MessageCircle, Forward, Zap } from 'lucide-react'
 import TimerRing from './TimerRing'
@@ -32,7 +32,7 @@ function Avatar({ url, username, size = 28 }) {
 
 function timeAgo(dateStr) {
   const diff = Math.floor((Date.now() - new Date(dateStr)) / 1000)
-  if (diff < 60)  return `${diff}s`
+  if (diff < 60)   return `${diff}s`
   if (diff < 3600) return `${Math.floor(diff / 60)}m`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`
   return `${Math.floor(diff / 86400)}d`
@@ -44,45 +44,76 @@ function hoursLeft(expiresAt) {
   return `${Math.floor(hrs)}h left`
 }
 
-export default function PostCard({ post: initialPost, currentUserId, compact = false, onVote }) {
-  const navigate   = useNavigate()
+export default function PostCard({
+  post: initialPost,
+  currentUserId,
+  compact = false,
+  onVote,
+  // For You animation
+  isForYou = false,
+  onVoteStart,
+  onVoteAnimationComplete,
+  // My Votes: server-side voted option overrides localStorage
+  initialVotedOptionId = null,
+  // My Posts: always show results + enhancements
+  isMyPostsView = false,
+}) {
+  const navigate    = useNavigate()
   const { session } = useAuth()
   const { voterId, hasVoted, getVotedOption, recordVote } = useVoter()
+  const timeoutsRef = useRef([])
 
-  const [post, setPost]               = useState(initialPost)
-  const [voted, setVoted]             = useState(() => hasVoted(initialPost.id))
-  const [votedOptionId, setVotedOptionId] = useState(() => getVotedOption(initialPost.id))
+  const [post, setPost]                   = useState(initialPost)
+  const [voted, setVoted]                 = useState(() => initialVotedOptionId ? true : hasVoted(initialPost.id))
+  const [votedOptionId, setVotedOptionId] = useState(() => initialVotedOptionId || getVotedOption(initialPost.id))
   const [showExtendModal, setShowExtendModal] = useState(false)
-  const [voting, setVoting]           = useState(false)
-  const [shareCount, setShareCount]   = useState(initialPost.share_count || 0)
-  const [shareCopied, setShareCopied] = useState(false)
+  const [voting, setVoting]               = useState(false)
+  const [shareCount, setShareCount]       = useState(initialPost.share_count || 0)
+  const [shareCopied, setShareCopied]     = useState(false)
+  const [showVoteMessage, setShowVoteMessage] = useState(false)
+
+  useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), [])
 
   useEffect(() => {
     setPost(initialPost)
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
 
-  const options   = post.options || []
-  const isClosed  = post.status === 'closed'
-  const showResults = voted || isClosed
+  const options  = post.options || []
+  const isClosed = post.status === 'closed'
 
-  const aiVerdict    = (post.ai_verdicts || [])[0]
-  const aiOptionId   = aiVerdict?.recommendation_option_id
-  const aiOption     = aiOptionId ? options.find(o => o.id === aiOptionId) : null
+  // AI verdict is still used to subtract the AI vote from percentages, just not displayed
+  const aiVerdict  = (post.ai_verdicts || [])[0]
+  const aiOptionId = aiVerdict?.recommendation_option_id
 
-  const humanCount   = (o) => o.id === aiOptionId ? Math.max(0, (o.vote_count || 0) - 1) : (o.vote_count || 0)
-  const totalVotes   = options.reduce((s, o) => s + humanCount(o), 0)
-  const winningId    = options.reduce((mx, o) => (!mx || humanCount(o) > humanCount(mx) ? o : mx), null)?.id
+  const humanCount = (o) => o.id === aiOptionId ? Math.max(0, (o.vote_count || 0) - 1) : (o.vote_count || 0)
+  const totalVotes = options.reduce((s, o) => s + humanCount(o), 0)
+  const winningId  = options.reduce((mx, o) => (!mx || humanCount(o) > humanCount(mx) ? o : mx), null)?.id
 
+  const showResults  = voted || isClosed || isMyPostsView
   const isOwner      = currentUserId && post.user_id === currentUserId
   const isRealtime   = post.mode === 'realtime'
   const msLeft       = new Date(post.expires_at) - Date.now()
   const canExtend    = isOwner && isRealtime && msLeft > 0 && msLeft < 5 * 60 * 1000
-
   const accentColor  = isRealtime ? '#993C1D' : '#185FA5'
 
+  function addTimeout(fn, ms) {
+    const id = setTimeout(fn, ms)
+    timeoutsRef.current.push(id)
+  }
+
+  function startForYouAnimation(postId) {
+    onVoteStart?.(postId)
+    addTimeout(() => {
+      setShowVoteMessage(true)
+      addTimeout(() => {
+        onVoteAnimationComplete?.(postId)
+      }, 1000)
+    }, 1500)
+  }
+
   async function handleVote(optionId) {
-    if (voting || voted || isClosed) return
+    if (voting || voted || isClosed || isMyPostsView) return
     setVoting(true)
     try {
       const { post: updated } = await api.castVote(
@@ -102,6 +133,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           ),
         }))
       }
+      if (isForYou) startForYouAnimation(post.id)
     } catch (err) {
       console.warn('Vote failed:', err.message)
       recordVote(post.id, optionId)
@@ -114,24 +146,22 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           o.id === optionId ? { ...o, vote_count: (o.vote_count || 0) + 1 } : o
         ),
       }))
+      if (isForYou) startForYouAnimation(post.id)
     } finally {
       setVoting(false)
     }
   }
 
   async function handleShare() {
-    const url = `${window.location.origin}/post/${post.id}`
+    const url       = `${window.location.origin}/post/${post.id}`
     const shareText = `${post.question} — vote now on This or That! 👇\n\n${url}`
 
-    // Fire-and-forget share count increment
     api.incrementShare(post.id)
       .then(({ share_count }) => setShareCount(share_count))
       .catch(() => setShareCount(c => c + 1))
 
     if (navigator.share) {
-      try {
-        await navigator.share({ title: post.question, text: shareText })
-      } catch {}
+      try { await navigator.share({ title: post.question, text: shareText }) } catch {}
     } else {
       try {
         await navigator.clipboard.writeText(shareText)
@@ -144,14 +174,14 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
         document.body.removeChild(el)
       }
       setShareCopied(true)
-      setTimeout(() => setShareCopied(false), 2000)
+      addTimeout(() => setShareCopied(false), 2000)
     }
   }
 
   return (
     <>
       <div
-        className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden"
+        className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden relative"
         style={{ borderWidth: '0.5px' }}
       >
         {/* Header */}
@@ -172,9 +202,13 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
             </span>
           </div>
 
-          {/* Timer */}
-          <div className="shrink-0 ml-2">
-            {isRealtime && !isClosed ? (
+          {/* Timer / status */}
+          <div className="shrink-0 ml-2 flex items-center gap-1.5">
+            {isClosed && isMyPostsView ? (
+              <span className="px-2 py-0.5 bg-[#534AB7]/10 text-[#534AB7] rounded-full text-[10px] font-semibold whitespace-nowrap">
+                Decision made
+              </span>
+            ) : isRealtime && !isClosed ? (
               <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
             ) : (
               <span className="text-xs text-[#6B6B6B] font-medium">
@@ -189,23 +223,23 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           {post.question}
         </p>
 
-        {/* Photos — unified grid; 'or' pill at exact centre for all option counts */}
+        {/* Photos — unified grid; 'or' pill at exact centre */}
         <div className="px-4 pb-4">
           <div className="relative">
             <div className="grid grid-cols-2 gap-2">
               {options.slice(0, 4).map((option) => {
-                const pct = totalVotes > 0 ? Math.round((humanCount(option) / totalVotes) * 100) : 0
+                const pct      = totalVotes > 0 ? Math.round((humanCount(option) / totalVotes) * 100) : 0
                 const isWinner = option.id === winningId
                 const isMyVote = option.id === votedOptionId
                 return (
                   <button
                     key={option.id}
                     onClick={() => handleVote(option.id)}
-                    disabled={voted || isClosed}
+                    disabled={voted || isClosed || isMyPostsView}
                     className="relative rounded-lg overflow-hidden focus:outline-none active:opacity-80 transition-opacity"
                     style={{
                       boxShadow: showResults && isWinner ? `0 0 0 2.5px ${accentColor}` : undefined,
-                      opacity: showResults && !isWinner ? 0.72 : 1,
+                      opacity:   showResults && !isWinner ? 0.72 : 1,
                     }}
                   >
                     {option.photo_url ? (
@@ -250,7 +284,7 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
               })}
             </div>
 
-            {/* 'or' pill — centred between 2 images, or at the 4-corner crosshair for 3–4 images */}
+            {/* 'or' pill — centred between all options */}
             {!showResults && (
               <span
                 className="absolute bg-white border border-[#E5E5E5] rounded-full px-2.5 py-1 text-xs font-semibold text-[#1A1A1A] shadow-sm pointer-events-none"
@@ -260,17 +294,6 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
               </span>
             )}
           </div>
-        </div>
-
-        {/* AI verdict strip */}
-        <div className="mx-3 mb-3 px-3 py-2 bg-[#F5F5F5] rounded-lg flex items-start gap-2">
-          <span className="text-[10px] font-bold text-[#534AB7] uppercase tracking-wide shrink-0 mt-0.5">AI</span>
-          <p className="text-xs text-[#6B6B6B] leading-snug">
-            {aiVerdict && aiOption
-              ? <>voted <span className="font-semibold text-[#1A1A1A]">{aiOption.label}</span> · {aiVerdict.insights?.[0]?.text || 'Based on current trends'}</>
-              : 'AI analysis pending…'
-            }
-          </p>
         </div>
 
         {/* Action row */}
@@ -300,7 +323,9 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
           </div>
 
           <span className="ml-auto text-xs text-[#6B6B6B]">
-            {totalVotes} vote{totalVotes !== 1 ? 's' : ''}
+            {isMyPostsView
+              ? `${totalVotes} reached`
+              : `${totalVotes} vote${totalVotes !== 1 ? 's' : ''}`}
           </span>
 
           {canExtend && (
@@ -313,6 +338,22 @@ export default function PostCard({ post: initialPost, currentUserId, compact = f
             </button>
           )}
         </div>
+
+        {/* Vote-logged overlay — fades in after 1.5s in For You */}
+        {showVoteMessage && (
+          <div
+            className="absolute inset-0 flex items-center justify-center z-30"
+            style={{ animation: 'fadeIn 0.3s ease forwards' }}
+          >
+            <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.88)' }} />
+            <div className="relative px-6 py-4 bg-[#534AB7] rounded-2xl shadow-xl text-center">
+              <p className="text-white text-sm font-semibold">Vote logged!</p>
+              <p className="text-white/90 text-xs mt-1">
+                Thanks from {post.users?.username || 'them'} 🙏
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
       {showExtendModal && (
