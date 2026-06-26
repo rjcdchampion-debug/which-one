@@ -42,4 +42,18 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 })
 
+// PATCH /api/users/plan — update the authenticated user's plan (mock upgrade)
+router.patch('/plan', authMiddleware, async (req, res) => {
+  try {
+    const { plan } = req.body
+    if (!['free', 'plus', 'pro'].includes(plan)) return res.status(400).json({ error: 'Invalid plan' })
+    const { data: user, error } = await supabase
+      .from('users').update({ plan }).eq('id', req.user.id).select().single()
+    if (error) throw error
+    res.json({ user })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router

@@ -16,9 +16,10 @@ const CATEGORY_COLOURS = {
   other:   '#6B6B6B',
 }
 
-function Avatar({ url, username, size = 28 }) {
-  const initial = (username || '?')[0].toUpperCase()
-  return url
+function Avatar({ url, username, plan, size = 28 }) {
+  const initial   = (username || '?')[0].toUpperCase()
+  const showBadge = plan === 'plus' || plan === 'pro'
+  const img = url
     ? <img src={url} alt={username} style={{ width: size, height: size }} className="rounded-full object-cover" />
     : (
       <div
@@ -28,6 +29,18 @@ function Avatar({ url, username, size = 28 }) {
         {initial}
       </div>
     )
+  if (!showBadge) return img
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      {img}
+      <span
+        className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[#534AB7] border-white flex items-center justify-center"
+        style={{ border: '1.5px solid white', fontSize: 8, color: 'white', fontWeight: 700, lineHeight: 1 }}
+      >
+        +
+      </span>
+    </div>
+  )
 }
 
 function timeAgo(dateStr) {
@@ -190,7 +203,7 @@ export default function PostCard({
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
           <div className="flex items-center gap-2 min-w-0">
-            <Avatar url={post.users?.avatar_url} username={post.users?.username} />
+            <Avatar url={post.users?.avatar_url} username={post.users?.username} plan={post.users?.plan} />
             <div className="min-w-0">
               <p className="text-sm font-medium text-[#1A1A1A] leading-none truncate">
                 {post.users?.username || 'anonymous'}

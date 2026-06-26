@@ -2,12 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Zap, Bell } from 'lucide-react'
 import PostCard from '../components/PostCard'
+import PaymentModal from '../components/PaymentModal'
 import TimerRing from '../components/TimerRing'
 import { api } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { MOCK_POSTS } from '../lib/mockData'
 import { useAuth } from '../contexts/AuthContext'
 import { useVoter } from '../hooks/useVoter'
+import { usePlan } from '../hooks/usePlan'
 
 const TABS = [
   { id: 'foryou',  label: 'For You'  },
@@ -34,6 +36,21 @@ export default function FeedScreen() {
   const navigate  = useNavigate()
   const { user, profile, session } = useAuth()
   const { hasVoted } = useVoter()
+  const { isPlus, recordBoost, showBoostPrompt, dismissBoostPrompt } = usePlan()
+
+  // My Posts AI payment
+  const [aiPayPostId, setAiPayPostId] = useState(null)
+
+  async function handleAiPurchase(postId) {
+    setAiPayPostId(null)
+    recordBoost()
+    try {
+      await api.requestAiVerdict(postId, session?.access_token)
+      // Refresh my posts
+      const data = await api.getFeed('mine', session?.access_token)
+      setPosts(data.posts || [])
+    } catch {}
+  }
 
   const [tab, setTab]         = useState('foryou')
   const [catFilter, setCatFilter] = useState('all')
@@ -186,6 +203,7 @@ export default function FeedScreen() {
       .every(p => hasVoted(p.id) && !animatingPostIds.has(p.id) && !collapsingPostIds.has(p.id))
 
   return (
+    <>
     <div className="flex flex-col h-full bg-[#F5F5F5]">
       <header className="shrink-0 z-20 bg-white border-b border-[#E5E5E5]" style={{ borderBottomWidth: '0.5px' }}>
 
@@ -278,27 +296,49 @@ export default function FeedScreen() {
               {mainPosts.length === 0 ? (
                 <EmptyState tab="mine" onPost={() => navigate('/create')} />
               ) : (
-                mainPosts.map(post => (
-                  <div key={post.id} className="space-y-1">
-                    <PostCard post={post} currentUserId={user?.id} isMyPostsView />
-                    <div
-                      className="bg-white border border-[#E5E5E5] rounded-card px-4 py-3 flex items-center gap-3"
-                      style={{ borderWidth: '0.5px' }}
-                    >
-                      <span className="text-xs text-[#6B6B6B] flex-1">
-                        <span style={{ color: '#534AB7' }}>✨</span> Want AI insight on this decision?
-                      </span>
-                      <div className="flex gap-2 shrink-0">
-                        <button className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg">
-                          Pay £0.99
-                        </button>
-                        <button className="px-3 py-1.5 border border-[#534AB7] text-[#534AB7] text-xs font-semibold rounded-lg">
-                          Plus
-                        </button>
-                      </div>
+                mainPosts.map(post => {
+                  const hasVerdict = post.ai_verdicts?.length > 0
+                  return (
+                    <div key={post.id} className="space-y-1">
+                      <PostCard post={post} currentUserId={user?.id} isMyPostsView />
+                      {!hasVerdict && (
+                        <div
+                          className="bg-white border border-[#E5E5E5] rounded-card px-4 py-3 flex items-center gap-3"
+                          style={{ borderWidth: '0.5px' }}
+                        >
+                          <span className="text-xs text-[#6B6B6B] flex-1">
+                            <span style={{ color: '#534AB7' }}>✨</span> Want AI insight on this decision?
+                          </span>
+                          <div className="flex gap-2 shrink-0">
+                            {isPlus ? (
+                              <button
+                                onClick={() => api.requestAiVerdict(post.id, session?.access_token).then(() => loadFeed())}
+                                className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
+                              >
+                                Get AI verdict
+                              </button>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setAiPayPostId(post.id)}
+                                  className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
+                                >
+                                  Pay £0.99
+                                </button>
+                                <button
+                                  onClick={() => navigate('/pricing')}
+                                  className="px-3 py-1.5 border border-[#534AB7] text-[#534AB7] text-xs font-semibold rounded-lg"
+                                >
+                                  Plus
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </section>
           ) : (
@@ -360,6 +400,36 @@ export default function FeedScreen() {
         </div>
       </main>
     </div>
+
+    {/* AI verdict payment modal */}
+    {aiPayPostId && (
+      <PaymentModal
+        featureLabel="AI verdict on your post"
+        price="£0.99"
+        onClose={() => setAiPayPostId(null)}
+        onPurchase={() => handleAiPurchase(aiPayPostId)}
+      />
+    )}
+
+    {/* Boost upgrade prompt (after 3 one-off purchases) */}
+    {showBoostPrompt && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center px-6" onClick={dismissBoostPrompt}>
+        <div className="absolute inset-0 bg-black/40" />
+        <div className="relative bg-white rounded-2xl p-6 max-w-sm w-full text-center" onClick={e => e.stopPropagation()}>
+          <p className="text-2xl mb-3">💡</p>
+          <p className="font-bold text-[#1A1A1A] mb-2">You've spent on a few boosts this month</p>
+          <p className="text-sm text-[#6B6B6B] mb-5">Get everything with Plus for just £4.99/month.</p>
+          <button
+            onClick={() => { dismissBoostPrompt(); navigate('/pricing') }}
+            className="w-full py-3.5 bg-[#534AB7] text-white rounded-btn font-semibold text-sm mb-2"
+          >
+            Upgrade to Plus
+          </button>
+          <button onClick={dismissBoostPrompt} className="text-xs text-[#6B6B6B]">Maybe later</button>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
 

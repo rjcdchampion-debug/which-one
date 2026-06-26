@@ -45,6 +45,19 @@ export const api = {
   getMyVotes: (token) =>
     request('/api/votes/mine', { headers: authHeaders(token) }),
 
+  upgradePlan: (plan, token) =>
+    request('/api/users/plan', {
+      method: 'PATCH',
+      headers: authHeaders(token),
+      body: JSON.stringify({ plan }),
+    }),
+
+  requestAiVerdict: (postId, token) =>
+    request(`/api/posts/${postId}/ai-verdict`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    }),
+
   getUserProfile: (id) =>
     request(`/api/users/${id}`),
 

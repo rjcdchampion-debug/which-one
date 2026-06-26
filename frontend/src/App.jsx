@@ -8,6 +8,7 @@ import ProfileScreen       from './screens/ProfileScreen'
 import LoginScreen         from './screens/LoginScreen'
 import RegisterScreen      from './screens/RegisterScreen'
 import SetupUsernameScreen from './screens/SetupUsernameScreen'
+import PricingScreen       from './screens/PricingScreen'
 
 function ProtectedRoute({ children }) {
   const { user, profileMissing, loading } = useAuth()
@@ -71,6 +72,7 @@ export default function App() {
           <ProfileScreen />
           <BottomNav />
         </>} />
+        <Route path="/pricing" element={<PricingScreen />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

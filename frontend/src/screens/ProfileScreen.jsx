@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Pencil, Check, X } from 'lucide-react'
+import { LogOut, Pencil, Check, X, Sparkles } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { usePlan } from '../hooks/usePlan'
 import { api } from '../lib/api'
 
 const PLAN_STYLES = {
@@ -69,8 +70,9 @@ export default function ProfileScreen() {
     }
   }
 
+  const { plan, isPlus } = usePlan()
+
   const username  = profile?.username || 'you'
-  const plan      = profile?.plan || 'free'
   const planStyle = PLAN_STYLES[plan] || PLAN_STYLES.free
 
   const activePosts = posts.filter(p => p.status === 'active')
@@ -128,12 +130,24 @@ export default function ProfileScreen() {
               <div className="flex items-center gap-2 mt-1">
                 <span
                   className="px-2 py-0.5 rounded-full text-xs font-semibold"
-                  style={{ background: '#F5F5F5', color: planStyle.text }}
+                  style={{
+                    background: isPlus ? '#534AB7' : '#F5F5F5',
+                    color: isPlus ? 'white' : planStyle.text,
+                  }}
                 >
-                  {planStyle.label}
+                  {isPlus ? `✨ ${planStyle.label}` : planStyle.label}
                 </span>
                 <span className="text-xs text-[#6B6B6B]">{posts.length} posts</span>
               </div>
+              {!isPlus && (
+                <button
+                  onClick={() => navigate('/pricing')}
+                  className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#534AB7]"
+                >
+                  <Sparkles size={12} />
+                  Upgrade to Plus
+                </button>
+              )}
             </div>
           </div>
 
