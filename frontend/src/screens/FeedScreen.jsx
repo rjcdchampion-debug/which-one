@@ -62,8 +62,6 @@ export default function FeedScreen() {
   // For You disappearing mechanic
   const [animatingPostIds, setAnimatingPostIds] = useState(new Set())
   const [collapsingPostIds, setCollapsingPostIds] = useState(new Set())
-  // Live tab expiry animation
-  const [expiringPostIds, setExpiringPostIds] = useState(new Set())
   const collapseTimersRef = useRef({})
 
   const channelRef = useRef(null)
@@ -101,7 +99,6 @@ export default function FeedScreen() {
     setCatFilter('all')
     setAnimatingPostIds(new Set())
     setCollapsingPostIds(new Set())
-    setExpiringPostIds(new Set())
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
     collapseTimersRef.current = {}
   }, [tab])
@@ -167,16 +164,6 @@ export default function FeedScreen() {
     collapseTimersRef.current[postId] = tid
   }
 
-  // Live tab: card reached 0 — keep it in the list while Supabase marks it closed
-  function handleExpireStart(postId) {
-    setExpiringPostIds(prev => new Set([...prev, postId]))
-  }
-
-  // Live tab: card finished its 5s sequence (3s hold + 2s fade) — remove from list
-  function handleExpire(postId) {
-    setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
-  }
-
   const filterByCat = (arr) =>
     catFilter === 'all' ? arr : arr.filter(p => p.category === catFilter)
 
@@ -196,7 +183,7 @@ export default function FeedScreen() {
   const mainPosts = tab === 'myvotes' ? [] : filterByCat(
     posts
       .filter(p => {
-        if (tab === 'live') return (p.mode === 'realtime' && p.status === 'active') || expiringPostIds.has(p.id)
+        if (tab === 'live') return p.mode === 'realtime' && p.status === 'active'
         if (tab === 'mine') return true
         // For You: exclude live-strip posts; exclude voted posts unless mid-animation
         if (realtimePosts.includes(p)) return false
@@ -386,25 +373,23 @@ export default function FeedScreen() {
                     return (
                       <div
                         key={post.id}
-                        style={tab !== 'live' ? {
+                        style={{
                           maxHeight:    isCollapsing ? 0 : 1000,
                           opacity:      isCollapsing ? 0 : 1,
                           overflow:     'hidden',
                           marginBottom: isCollapsing ? -12 : undefined,
                           transition:   isCollapsing
+                            // Card fades over 2s; height collapses 0.4s after the fade completes
                             ? 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s'
                             : undefined,
-                        } : undefined}
+                        }}
                       >
                         <PostCard
                           post={post}
                           currentUserId={user?.id}
                           isForYou={tab === 'foryou' && !!user}
-                          isLive={tab === 'live'}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
-                          onExpireStart={handleExpireStart}
-                          onExpire={handleExpire}
                         />
                       </div>
                     )

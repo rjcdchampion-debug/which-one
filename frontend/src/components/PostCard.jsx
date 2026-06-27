@@ -70,10 +70,6 @@ export default function PostCard({
   initialVotedOptionId = null,
   // My Posts: always show results + enhancements
   isMyPostsView = false,
-  // Live tab
-  isLive = false,
-  onExpireStart,  // called at second 0 — keeps card in list while Supabase marks it closed
-  onExpire,       // called after 5s (3s hold + 2s fade) — FeedScreen removes from list
 }) {
   const navigate    = useNavigate()
   const { session } = useAuth()
@@ -91,13 +87,6 @@ export default function PostCard({
   const [voteError, setVoteError]         = useState(false)
   // Prevents double-tap before React re-renders with voted=true
   const votingRef = useRef(false)
-  // Countdown — always running, drives TimerRing and expiry detection
-  const [secondsLeft, setSecondsLeft] = useState(
-    () => Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
-  )
-  // Live tab expiry phases
-  const [expiryPhase, setExpiryPhase] = useState('none') // 'none' | 'winner' | 'fading'
-  const expiryFiredRef = useRef(false)
 
   useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), [])
 
@@ -105,23 +94,6 @@ export default function PostCard({
     setPost(initialPost)
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
-
-  // Each card owns its countdown. Runs unconditionally so TimerRing always has fresh data.
-  useEffect(() => {
-    const compute = () => Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
-    const id = setInterval(() => setSecondsLeft(compute()), 1000)
-    return () => clearInterval(id)
-  }, [post.expires_at])
-
-  // Expiry sequence — fires once when this live card's countdown reaches zero
-  useEffect(() => {
-    if (!isLive || secondsLeft !== 0 || expiryFiredRef.current) return
-    expiryFiredRef.current = true
-    onExpireStart?.(post.id)
-    setExpiryPhase('winner')
-    addTimeout(() => setExpiryPhase('fading'), 3000)
-    addTimeout(() => onExpire?.(post.id), 5000)
-  }, [secondsLeft, isLive])
 
   const options  = post.options || []
   const isClosed = post.status === 'closed'
@@ -138,8 +110,7 @@ export default function PostCard({
   const totalVotes = options.reduce((s, o) => s + humanCount(o), 0)
   const winningId  = options.reduce((mx, o) => (!mx || humanCount(o) > humanCount(mx) ? o : mx), null)?.id
 
-  const clientExpired = expiryPhase === 'winner' || expiryPhase === 'fading'
-  const showResults   = voted || isClosed || isMyPostsView || clientExpired
+  const showResults  = voted || isClosed || isMyPostsView
   const isOwner      = currentUserId && post.user_id === currentUserId
   const isRealtime   = post.mode === 'realtime'
   const msLeft       = new Date(post.expires_at) - Date.now()
@@ -243,11 +214,7 @@ export default function PostCard({
     <>
       <div
         className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden relative"
-        style={{
-          borderWidth: '0.5px',
-          opacity:    expiryPhase === 'fading' ? 0 : 1,
-          transition: expiryPhase === 'fading' ? 'opacity 2s ease' : undefined,
-        }}
+        style={{ borderWidth: '0.5px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -274,12 +241,7 @@ export default function PostCard({
                 Decision made
               </span>
             ) : isRealtime && !isClosed ? (
-              <TimerRing
-                secondsLeft={secondsLeft}
-                totalMinutes={15}
-                size="sm"
-                showThumbsUp={clientExpired}
-              />
+              <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
             ) : (
               <span className="text-xs text-[#6B6B6B] font-medium">
                 {isClosed ? 'Closed' : hoursLeft(post.expires_at)}
@@ -308,14 +270,8 @@ export default function PostCard({
                     disabled={voted || isClosed || isMyPostsView}
                     className="relative rounded-lg overflow-hidden focus:outline-none active:opacity-80 transition-opacity"
                     style={{
-                      boxShadow: clientExpired && isWinner
-                        ? '0 0 0 3px #854F0B'
-                        : showResults && isWinner
-                          ? `0 0 0 2.5px ${accentColor}`
-                          : undefined,
-                      opacity: clientExpired && !isWinner ? 0.70 : showResults && !isWinner ? 0.72 : 1,
-                      filter: clientExpired && isWinner ? 'brightness(1.1) saturate(1.2)' : undefined,
-                      transition: 'box-shadow 0.4s ease, opacity 0.6s ease, filter 0.6s ease',
+                      boxShadow: showResults && isWinner ? `0 0 0 2.5px ${accentColor}` : undefined,
+                      opacity:   showResults && !isWinner ? 0.72 : 1,
                     }}
                   >
                     {option.photo_url ? (
@@ -345,21 +301,12 @@ export default function PostCard({
                         <div className="mt-1 h-1 rounded-full bg-white/30">
                           <div
                             className="h-full rounded-full transition-all duration-1000"
-                            style={{ width: `${pct}%`, background: clientExpired && isWinner ? '#854F0B' : isWinner ? accentColor : 'white' }}
+                            style={{ width: `${pct}%`, background: isWinner ? accentColor : 'white' }}
                           />
                         </div>
                       </div>
                     )}
-                    {/* Winner badge — top-centre of the winning photo */}
-                    {clientExpired && isWinner && (
-                      <div
-                        className="absolute top-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white"
-                        style={{ background: '#854F0B', whiteSpace: 'nowrap' }}
-                      >
-                        Winner 🏆
-                      </div>
-                    )}
-                    {isMyVote && !clientExpired && (
+                    {isMyVote && (
                       <div className="absolute top-2 right-2 bg-white/90 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-[#534AB7]">
                         Your vote
                       </div>
