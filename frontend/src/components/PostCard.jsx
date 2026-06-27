@@ -312,6 +312,21 @@ export default function PostCard({
           </div>
         </div>
 
+        {/* AI verdict strip — shown when a verdict exists (paid or Plus) */}
+        {aiVerdict && (
+          <div className="mx-4 mb-3 px-3 py-2 bg-[#534AB7]/8 rounded-lg flex items-start gap-2">
+            <span className="text-[11px] shrink-0 mt-0.5">✨</span>
+            <p className="text-[11px] text-[#534AB7] leading-snug">
+              <span className="font-semibold">
+                AI voted {options.find(o => o.id === aiVerdict.recommendation_option_id)?.label || 'Option A'}
+              </span>
+              {aiVerdict.insights?.[0]?.text
+                ? ` · ${aiVerdict.insights[0].text}`
+                : ''}
+            </p>
+          </div>
+        )}
+
         {/* Action row */}
         <div className="flex items-center gap-3 px-4 pb-4">
           <button

@@ -59,21 +59,27 @@ export default function PricingScreen() {
   const [confirming, setConfirming] = useState(null)
   const [upgrading, setUpgrading]   = useState(false)
   const [success, setSuccess]       = useState(false)
+  const [upgradeError, setUpgradeError] = useState(null)
 
   async function handleSimulateUpgrade() {
     if (!confirming || upgrading) return
     setUpgrading(true)
+    setUpgradeError(null)
     try {
+      // Always try to persist to DB; only skip if truly no auth token
       if (session?.access_token) {
         await api.upgradePlan(confirming, session.access_token)
       }
       upgradeTo(confirming)
       setSuccess(true)
       setTimeout(() => navigate('/'), 2000)
-    } catch {
-      upgradeTo(confirming) // still upgrade locally even if API fails
+    } catch (err) {
+      console.error('[upgrade]', err)
+      // Still update localStorage so the UI reflects the upgrade
+      upgradeTo(confirming)
+      setUpgradeError(`DB sync failed (${err.message}) — plan saved locally.`)
       setSuccess(true)
-      setTimeout(() => navigate('/'), 2000)
+      setTimeout(() => navigate('/'), 3000)
     } finally {
       setUpgrading(false)
     }
@@ -88,6 +94,9 @@ export default function PricingScreen() {
             Welcome to {confirming === 'pro' ? 'Pro' : 'Plus'}!
           </p>
           <p className="text-sm text-[#6B6B6B] mt-2">Returning to the feed…</p>
+          {upgradeError && (
+            <p className="mt-3 text-xs text-red-500 max-w-xs">{upgradeError}</p>
+          )}
         </div>
       </div>
     )

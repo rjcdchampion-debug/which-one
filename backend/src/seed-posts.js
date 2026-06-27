@@ -316,42 +316,59 @@ async function createSeedPost(userId, category, mode) {
     { post_id: post.id, label: 'Option B', photo_url: selectedImages[1], vote_count: getRandomVoteCount() },
   ]
 
-  const { error: optErr } = await supabase.from('options').insert(optionData)
+  const { data: createdOptions, error: optErr } = await supabase
+    .from('options').insert(optionData).select()
 
-  if (optErr) {
+  if (optErr || !createdOptions) {
     console.error('Failed to create options:', optErr)
     return null
   }
 
-  if (isRealtime) {
-    const winningIdx = optionData[0].vote_count > optionData[1].vote_count ? 0 : 1
-    await supabase.from('ai_verdicts').insert({
-      post_id: post.id,
-      recommendation_option_id: optionData[winningIdx].id,
-      confidence: 0.72,
-      insights: [
-        { text: 'Trending in this category' },
-        { text: 'Community preference aligns' },
-        { text: 'Based on current trends' },
-      ],
-      sources: [
-        { name: 'Trend analysis' },
-        { name: 'Community insights' },
-      ],
-    })
+  // Always add an AI verdict for seed posts so the strip renders in feed
+  const winningIdx = createdOptions[0].vote_count > createdOptions[1].vote_count ? 0 : 1
+  const winnerLabel = createdOptions[winningIdx].label
+  const verdictReasons = {
+    fashion: 'Stronger visual appeal and better colour balance for the occasion.',
+    food:    'More visually appetising presentation and better plating.',
+    home:    'Better proportions and visual harmony with the space.',
+    design:  'Cleaner composition with stronger brand recall.',
+    beauty:  'More flattering tones that complement natural features.',
+    other:   'Stronger visual impact and broader audience appeal.',
   }
+  await supabase.from('ai_verdicts').insert({
+    post_id: post.id,
+    recommendation_option_id: createdOptions[winningIdx].id,
+    confidence: 0.76,
+    insights: [
+      { text: verdictReasons[category] || 'Best choice based on visual analysis.' },
+      { text: 'Community preference aligns with this option.' },
+      { text: 'Higher engagement predicted in this category.' },
+    ],
+    sources: [
+      { name: 'Trend analysis' },
+      { name: 'Community insights' },
+    ],
+  })
 
   return post
 }
 
+// Module-level counter so rotation persists across job runs within the same process
+let seedUserRotationIdx = 0
+
 async function ensureSeedStructure() {
-  const { data: firstUser } = await supabase.from('users').select('id').limit(1).single()
-  if (!firstUser) {
+  const { data: seedUsers } = await supabase.from('users').select('id').limit(4)
+  if (!seedUsers?.length) {
     console.log('[Seed] No users found — skipping seed structure')
     return
   }
 
-  const userId = firstUser.id
+  function nextUserId() {
+    const uid = seedUsers[seedUserRotationIdx % seedUsers.length].id
+    seedUserRotationIdx++
+    return uid
+  }
+
   const categories = ['fashion', 'food', 'home', 'design', 'beauty']
 
   for (const category of categories) {
@@ -367,7 +384,7 @@ async function ensureSeedStructure() {
       const needed = 3 - (count12h || 0)
       console.log(`[Seed] ${category}: need ${needed} 12-hour posts`)
       for (let i = 0; i < needed; i++) {
-        await createSeedPost(userId, category, 'twelve_hour')
+        await createSeedPost(nextUserId(), category, 'twelve_hour')
       }
     }
 
@@ -383,7 +400,7 @@ async function ensureSeedStructure() {
       const needed = 3 - (countRT || 0)
       console.log(`[Seed] ${category}: need ${needed} realtime posts`)
       for (let i = 0; i < needed; i++) {
-        await createSeedPost(userId, category, 'realtime')
+        await createSeedPost(nextUserId(), category, 'realtime')
       }
     }
   }
