@@ -281,6 +281,10 @@ router.post('/:id/ai-verdict', authMiddleware, async (req, res) => {
 
     await castAIVote(postId, recommendedOption.id, reason)
 
+    // Mark the post as having a paid AI verdict (free user one-off purchase)
+    // Plus/Pro users are handled by checking post.users.plan on the frontend
+    await supabase.from('posts').update({ ai_verdict_paid: true }).eq('id', postId)
+
     const { data: verdict } = await supabase
       .from('ai_verdicts').select('*').eq('post_id', postId).single()
 

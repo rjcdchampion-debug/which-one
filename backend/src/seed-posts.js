@@ -298,6 +298,7 @@ async function createSeedPost(userId, category, mode) {
     question,
     status: 'active',
     expires_at: expiresAt.toISOString(),
+    ai_verdict_paid: true,  // seed posts always show the AI strip as demo content
   }
 
   const { data: post, error: postErr } = await supabase

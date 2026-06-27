@@ -98,6 +98,10 @@ export default function PostCard({
   // AI verdict is still used to subtract the AI vote from percentages, just not displayed
   const aiVerdict  = (post.ai_verdicts || [])[0]
   const aiOptionId = aiVerdict?.recommendation_option_id
+  const creatorPlan = post.users?.plan
+  const showAiStrip = !!aiVerdict && (
+    creatorPlan === 'plus' || creatorPlan === 'pro' || !!post.ai_verdict_paid
+  )
 
   const humanCount = (o) => o.id === aiOptionId ? Math.max(0, (o.vote_count || 0) - 1) : (o.vote_count || 0)
   const totalVotes = options.reduce((s, o) => s + humanCount(o), 0)
@@ -312,8 +316,8 @@ export default function PostCard({
           </div>
         </div>
 
-        {/* AI verdict strip — shown when a verdict exists (paid or Plus) */}
-        {aiVerdict && (
+        {/* AI verdict strip — shown for Plus/Pro creators or paid one-off verdict */}
+        {showAiStrip && (
           <div className="mx-4 mb-3 px-3 py-2 bg-[#534AB7]/8 rounded-lg flex items-start gap-2">
             <span className="text-[11px] shrink-0 mt-0.5">✨</span>
             <p className="text-[11px] text-[#534AB7] leading-snug">
