@@ -94,6 +94,7 @@ export default function PostCard({
   const votingRef = useRef(false)
   // Live tab expiry
   const [expiryPhase, setExpiryPhase] = useState('none') // 'none' | 'revealing' | 'done'
+  const [timerReady, setTimerReady]   = useState(false)  // false until 500ms after mount (gates urgency animations)
   const expireSignaledRef = useRef(false) // prevents calling onExpireStart twice
   const expiryFiredRef    = useRef(false) // prevents running sequence twice
 
@@ -103,6 +104,15 @@ export default function PostCard({
     setPost(initialPost)
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
+
+  // Hold urgency animations for 500ms after the card mounts or the post changes,
+  // so a newly promoted card doesn't fire urgency the instant it slides into view.
+  useEffect(() => {
+    if (!isLive) return
+    setTimerReady(false)
+    const t = setTimeout(() => setTimerReady(true), 500)
+    return () => clearTimeout(t)
+  }, [isLive, post.id])
 
   // Live tab: detect when this post expires and signal the parent to queue it
   useEffect(() => {
@@ -283,7 +293,13 @@ export default function PostCard({
                 Decision made
               </span>
             ) : isRealtime && !isClosed ? (
-              <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
+              <TimerRing
+                key={post.expires_at}
+                expiresAt={post.expires_at}
+                totalMinutes={15}
+                size="sm"
+                ready={timerReady}
+              />
             ) : (
               <span className="text-xs text-[#6B6B6B] font-medium">
                 {isClosed ? 'Closed' : hoursLeft(post.expires_at)}

@@ -3,11 +3,28 @@ import { useEffect, useState } from 'react'
 const RADIUS = 32
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
+// Scale factor per second in the last 10s. Index = secondsLeft (0–10).
+// At 0 the number fills the entire dial.
+const URGENCY_SCALE = [
+  3.5,  // 0s — fills dial
+  1.8,  // 1s
+  1.7,  // 2s
+  1.6,  // 3s
+  1.5,  // 4s
+  1.4,  // 5s
+  1.3,  // 6s
+  1.2,  // 7s
+  1.13, // 8s
+  1.07, // 9s
+  1.0,  // 10s — normal
+]
+
 function getSecondsLeft(expiresAt) {
   return Math.max(0, Math.floor((new Date(expiresAt) - Date.now()) / 1000))
 }
 
-export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md' }) {
+// ready = false while the card is sliding into position; gates urgency animations
+export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', ready = true }) {
   const [secondsLeft, setSecondsLeft] = useState(() => getSecondsLeft(expiresAt))
 
   useEffect(() => {
@@ -20,16 +37,16 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md' })
   const progress     = totalSeconds > 0 ? secondsLeft / totalSeconds : 0
   const dashOffset   = CIRCUMFERENCE * (1 - progress)
 
-  // Urgency window: last 10 seconds (exclusive of 0 so pulse stops when expired)
-  const isUrgent = secondsLeft > 0 && secondsLeft <= 10
+  // Urgency only kicks in once the card is fully in position (ready) and time is critical
+  const isUrgent = ready && secondsLeft <= 10
 
   const color =
     secondsLeft < 120 ? '#993C1D' :
     secondsLeft < 300 ? '#f59e0b' :
     '#534AB7'
 
-  const mins  = Math.floor(secondsLeft / 60)
-  const secs  = secondsLeft % 60
+  const mins = Math.floor(secondsLeft / 60)
+  const secs = secondsLeft % 60
 
   // In last 10s show bare number; otherwise show M:SS
   const label = secondsLeft <= 10
@@ -39,10 +56,8 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md' })
   const dim          = size === 'sm' ? 62 : 72
   const baseFontSize = size === 'sm' ? 11 : 12
 
-  // Text grows from 1× at s=10 to ~1.5× at s=1; stays at base when not urgent
-  const urgencyFactor = isUrgent ? 1 + ((10 - secondsLeft) / 9) * 0.5 : 1
+  const urgencyFactor = isUrgent ? (URGENCY_SCALE[secondsLeft] ?? 1.0) : 1.0
   const fontSize      = Math.round(baseFontSize * urgencyFactor)
-  // Bold increases from 700 → 900 over the last 10 s (20 units per second)
   const fontWeight    = isUrgent ? Math.min(900, 700 + (10 - secondsLeft) * 22) : 700
 
   return (
