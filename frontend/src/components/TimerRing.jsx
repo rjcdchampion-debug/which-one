@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
+import { ThumbsUp } from 'lucide-react'
 
 const RADIUS = 32
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
 
 // Scale factor per second in the last 10s. Index = secondsLeft (0–10).
-// At 0 the number fills the entire dial.
 const URGENCY_SCALE = [
-  3.5,  // 0s — fills dial
+  3.5,  // 0s — fills dial (but replaced by thumbs up)
   1.8,  // 1s
   1.7,  // 2s
   1.6,  // 3s
@@ -23,9 +23,9 @@ function getSecondsLeft(expiresAt) {
   return Math.max(0, Math.floor((new Date(expiresAt) - Date.now()) / 1000))
 }
 
-// ready   = false while the card is sliding into position; gates urgency animations
-// loading = true while the post is fetching fresh expires_at — shows neutral grey ring, no number
-export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', ready = true, loading = false }) {
+// ready        = false while the card is in its 400ms settle delay; gates urgency animations
+// showThumbsUp = true during the winner reveal phase (expiryPhase !== 'none' in PostCard)
+export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', ready = true, showThumbsUp = false }) {
   const [secondsLeft, setSecondsLeft] = useState(() => getSecondsLeft(expiresAt))
 
   useEffect(() => {
@@ -34,11 +34,43 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', r
     return () => clearInterval(id)
   }, [expiresAt])
 
+  const dim          = size === 'sm' ? 62 : 72
+  const baseFontSize = size === 'sm' ? 11 : 12
+
+  // Thumbs-up state: ring fills gold, icon appears
+  if (showThumbsUp) {
+    const iconSize = size === 'sm' ? 18 : 22
+    return (
+      <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
+        <svg
+          width={dim}
+          height={dim}
+          viewBox="0 0 80 80"
+          style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}
+        >
+          {/* Full gold fill — dashOffset 0 = completely full ring */}
+          <circle cx="40" cy="40" r={RADIUS} fill="none" stroke="#854F0B" strokeWidth="7"
+            strokeDasharray={CIRCUMFERENCE} strokeDashoffset={0} strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.3s ease' }}
+          />
+        </svg>
+        <ThumbsUp
+          size={iconSize}
+          style={{
+            color: '#854F0B',
+            fill: '#854F0B',
+            position: 'relative',
+            animation: 'thumbsUpIn 0.3s ease-out forwards',
+          }}
+        />
+      </div>
+    )
+  }
+
   const totalSeconds = totalMinutes * 60
   const progress     = totalSeconds > 0 ? secondsLeft / totalSeconds : 0
   const dashOffset   = CIRCUMFERENCE * (1 - progress)
 
-  // Urgency only kicks in once the card is fully in position (ready) and time is critical
   const isUrgent = ready && secondsLeft <= 10
 
   const color =
@@ -48,34 +80,13 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', r
 
   const mins = Math.floor(secondsLeft / 60)
   const secs = secondsLeft % 60
-
-  // In last 10s show bare number; otherwise show M:SS
   const label = secondsLeft <= 10
     ? `${secondsLeft}`
     : `${mins}:${String(secs).padStart(2, '0')}`
 
-  const dim          = size === 'sm' ? 62 : 72
-  const baseFontSize = size === 'sm' ? 11 : 12
-
   const urgencyFactor = isUrgent ? (URGENCY_SCALE[secondsLeft] ?? 1.0) : 1.0
   const fontSize      = Math.round(baseFontSize * urgencyFactor)
   const fontWeight    = isUrgent ? Math.min(900, 700 + (10 - secondsLeft) * 22) : 700
-
-  // While loading: neutral grey ring, no number
-  if (loading) {
-    return (
-      <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
-        <svg
-          width={dim}
-          height={dim}
-          viewBox="0 0 80 80"
-          style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}
-        >
-          <circle cx="40" cy="40" r={RADIUS} fill="none" stroke="#E5E5E5" strokeWidth="5" />
-        </svg>
-      </div>
-    )
-  }
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
@@ -108,7 +119,6 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', r
           color,
           lineHeight: 1,
           transition: 'color 0.3s ease',
-          // No transition on size/weight — abrupt jump each second amplifies urgency
         }}
       >
         {label}

@@ -70,11 +70,10 @@ export default function PostCard({
   initialVotedOptionId = null,
   // My Posts: always show results + enhancements
   isMyPostsView = false,
-  // Live tab expiry animation
-  isLive = false,
-  expiryAllowed = false, // FeedScreen grants permission to start sequence (prevents simultaneous animations)
-  onExpireStart,         // called immediately when client timer hits 0 — queues post in FeedScreen
-  onPostExpire,          // called after 3s hold — triggers collapse in FeedScreen
+  // Live tab: null = not live tab; 0 = top/counting card; 1,2,3 = static display only
+  livePosition = null,
+  onExpireStart,  // called when countdown hits 0 (keeps card in list during animation)
+  onPostExpire,   // called after 3s winner hold (triggers FeedScreen collapse)
 }) {
   const navigate    = useNavigate()
   const { session } = useAuth()
@@ -92,14 +91,12 @@ export default function PostCard({
   const [voteError, setVoteError]         = useState(false)
   // Prevents double-tap before React re-renders with voted=true
   const votingRef = useRef(false)
-  // Live tab expiry
-  const [expiryPhase, setExpiryPhase]   = useState('none') // 'none' | 'revealing' | 'done'
-  // Slide-in: Live cards start invisible and slide up after fetching fresh data
-  const [slideVisible, setSlideVisible] = useState(!isLive)
-  const [fetchingTimer, setFetchingTimer] = useState(isLive)
-  const [timerReady, setTimerReady]     = useState(false)
-  const expireSignaledRef = useRef(false) // prevents calling onExpireStart twice
-  const expiryFiredRef    = useRef(false) // prevents running sequence twice
+  // Live tab
+  const isLive    = livePosition !== null
+  const isTopLive = livePosition === 0
+  const [expiryPhase, setExpiryPhase]     = useState('none') // 'none' | 'revealing' | 'done'
+  const [countdownActive, setCountdownActive] = useState(false) // true only for top card after 400ms settle
+  const expiryFiredRef = useRef(false) // prevents sequence from firing twice
 
   useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), [])
 
@@ -108,73 +105,46 @@ export default function PostCard({
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
 
-  // Live cards: fetch fresh expires_at from DB on mount, then slide in.
-  // This prevents any stale or inherited timer state when a card is promoted to top.
+  // Only the top card runs the countdown. When a card reaches position 0 (promoted or
+  // initial load) wait 400ms for the slide-up animation to settle before starting.
   useEffect(() => {
-    if (!isLive) return
-    let cancelled = false
-    setFetchingTimer(true)
-    setSlideVisible(false)
-    setTimerReady(false)
+    if (!isTopLive) {
+      setCountdownActive(false)
+      return
+    }
+    const t = setTimeout(() => setCountdownActive(true), 400)
+    return () => clearTimeout(t)
+  }, [isTopLive])
 
-    api.getPost(post.id)
-      .then(data => {
-        if (cancelled) return
-        // Only update expires_at — keep vote counts etc. from the live prop stream
-        if (data?.post?.expires_at) {
-          setPost(prev => ({ ...prev, expires_at: data.post.expires_at }))
-        }
-        setFetchingTimer(false)
-        // Next frame: trigger the CSS slide-in transition
-        requestAnimationFrame(() => {
-          if (!cancelled) setSlideVisible(true)
-        })
-        // After slide-in (0.4s) + 0.5s hold = 0.9s before urgency animations start
-        const t = setTimeout(() => { if (!cancelled) setTimerReady(true) }, 900)
-        timeoutsRef.current.push(t)
-      })
-      .catch(() => {
-        if (cancelled) return
-        // On fetch failure fall back gracefully: show card and use existing expires_at
-        setFetchingTimer(false)
-        requestAnimationFrame(() => { if (!cancelled) setSlideVisible(true) })
-        const t = setTimeout(() => { if (!cancelled) setTimerReady(true) }, 900)
-        timeoutsRef.current.push(t)
-      })
-
-    return () => { cancelled = true }
-  }, [isLive, post.id])
-
-  // Live tab: detect when this post expires and signal the parent to queue it
+  // Countdown interval — only runs for the active top card
   useEffect(() => {
-    if (!isLive) return
+    if (!countdownActive) return
     function tick() {
       const s = Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
-      if (s === 0 && !expireSignaledRef.current) {
-        expireSignaledRef.current = true
-        onExpireStart?.(post.id) // FeedScreen queues; grants expiryAllowed when it's our turn
+      if (s === 0 && !expiryFiredRef.current) {
+        expiryFiredRef.current = true
+        onExpireStart?.(post.id)
+        runExpirySequence()
       }
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [post.expires_at, isLive])
-
-  // FeedScreen grants permission when it's this post's turn in the queue
-  useEffect(() => {
-    if (expiryAllowed && !expiryFiredRef.current) {
-      expiryFiredRef.current = true
-      runExpirySequence()
-    }
-  }, [expiryAllowed])
+  }, [countdownActive, post.expires_at])
 
   function runExpirySequence() {
     setExpiryPhase('revealing')
-    // Hold winner state for 3s, then signal FeedScreen to start collapse
     addTimeout(() => {
       setExpiryPhase('done')
       onPostExpire?.(post.id)
     }, 3000)
+  }
+
+  // Static M:SS display for non-top live cards (no interval — frozen at render time)
+  function staticTimeLeft(expiresAt) {
+    const s = Math.max(0, Math.floor((new Date(expiresAt) - Date.now()) / 1000))
+    const m = Math.floor(s / 60)
+    return `${m}:${String(s % 60).padStart(2, '0')}`
   }
 
   const options  = post.options || []
@@ -297,13 +267,7 @@ export default function PostCard({
     <>
       <div
         className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden relative"
-        style={{
-          borderWidth: '0.5px',
-          // Live cards slide up from below after fetching fresh data
-          opacity:    isLive ? (slideVisible ? 1 : 0) : 1,
-          transform:  isLive ? (slideVisible ? 'translateY(0)' : 'translateY(16px)') : undefined,
-          transition: isLive && slideVisible ? 'opacity 0.4s ease, transform 0.4s ease' : undefined,
-        }}
+        style={{ borderWidth: '0.5px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -329,14 +293,19 @@ export default function PostCard({
               <span className="px-2 py-0.5 bg-[#534AB7]/10 text-[#534AB7] rounded-full text-[10px] font-semibold whitespace-nowrap">
                 Decision made
               </span>
+            ) : isLive && livePosition > 0 ? (
+              /* Non-top live cards: frozen static time, no animation */
+              <span className="text-xs font-medium tabular-nums" style={{ color: '#6B6B6B' }}>
+                {staticTimeLeft(post.expires_at)}
+              </span>
             ) : isRealtime && !isClosed ? (
               <TimerRing
                 key={post.expires_at}
                 expiresAt={post.expires_at}
                 totalMinutes={15}
                 size="sm"
-                ready={timerReady}
-                loading={fetchingTimer}
+                ready={countdownActive}
+                showThumbsUp={clientExpired}
               />
             ) : (
               <span className="text-xs text-[#6B6B6B] font-medium">

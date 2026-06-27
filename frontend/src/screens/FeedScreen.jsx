@@ -64,15 +64,7 @@ export default function FeedScreen() {
   const [collapsingPostIds, setCollapsingPostIds] = useState(new Set())
   // Live tab expiry animation
   const [expiringPostIds, setExpiringPostIds] = useState(new Set())
-  const [expiryGoIds, setExpiryGoIds]         = useState(new Set()) // posts allowed to run sequence now
-  const [liveRemountKeys, setLiveRemountKeys] = useState({}) // {postId: uniqueKey} — changing key forces remount
-  const expiryQueueRef  = useRef([])   // postIds waiting their turn
-  const expiryActiveRef = useRef(false) // true while an animation is running
   const collapseTimersRef = useRef({})
-
-  // Ref so setTimeout callbacks can read current posts without stale closure
-  const postsRef = useRef([])
-  useEffect(() => { postsRef.current = posts }, [posts])
 
   const channelRef = useRef(null)
 
@@ -110,10 +102,6 @@ export default function FeedScreen() {
     setAnimatingPostIds(new Set())
     setCollapsingPostIds(new Set())
     setExpiringPostIds(new Set())
-    setExpiryGoIds(new Set())
-    setLiveRemountKeys({})
-    expiryQueueRef.current = []
-    expiryActiveRef.current = false
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
     collapseTimersRef.current = {}
   }, [tab])
@@ -179,42 +167,20 @@ export default function FeedScreen() {
     collapseTimersRef.current[postId] = tid
   }
 
-  // Live tab: PostCard signals expiry — keep post in DOM and queue it
+  // Live tab: keep expired post in DOM during the winner reveal + collapse animation
   function handleExpireStart(postId) {
     setExpiringPostIds(prev => new Set([...prev, postId]))
-    expiryQueueRef.current.push(postId)
-    if (!expiryActiveRef.current) drainExpiryQueue()
   }
 
-  // Dequeue next post and grant it permission to run its winner sequence
-  function drainExpiryQueue() {
-    const postId = expiryQueueRef.current.shift()
-    if (!postId) { expiryActiveRef.current = false; return }
-    expiryActiveRef.current = true
-    setExpiryGoIds(prev => new Set([...prev, postId]))
-  }
-
-  // Live tab: PostCard finished 3s hold — start collapse, then process next in queue
+  // Live tab: 3s hold done — start 2s fade + 0.4s height collapse
   function handlePostExpire(postId) {
-    setExpiryGoIds(prev => { const s = new Set(prev); s.delete(postId); return s })
     setCollapsingPostIds(prev => new Set([...prev, postId]))
     const tid = setTimeout(() => {
       setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
-      delete collapseTimersRef.current[`exp_${postId}`]
-
-      // Force-remount the next live card so it mounts fresh and fetches its own timer
-      const nextLive = postsRef.current
-        .filter(p => p.mode === 'realtime' && p.status === 'active' && p.id !== postId)
-        .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))[0]
-      if (nextLive) {
-        setLiveRemountKeys(prev => ({ ...prev, [nextLive.id]: `${nextLive.id}_${Date.now()}` }))
-      }
-
-      // 0.5s pause before starting the next expiry animation
-      setTimeout(drainExpiryQueue, 500)
+      delete collapseTimersRef.current[postId]
     }, 2700)
-    collapseTimersRef.current[`exp_${postId}`] = tid
+    collapseTimersRef.current[postId] = tid
   }
 
   const filterByCat = (arr) =>
@@ -421,16 +387,11 @@ export default function FeedScreen() {
                     realtimePosts.length === 0 && <EmptyState tab={tab} onPost={() => navigate('/create')} />
                   )
                 ) : (
-                  mainPosts.map(post => {
+                  mainPosts.map((post, index) => {
                     const isCollapsing = collapsingPostIds.has(post.id)
-                    // Live tab: use a unique key so the next card fully remounts after an expiry,
-                    // ensuring it starts with clean state and fetches its own fresh timer value.
-                    const cardKey = tab === 'live'
-                      ? (liveRemountKeys[post.id] ?? post.id)
-                      : post.id
                     return (
                       <div
-                        key={cardKey}
+                        key={post.id}
                         style={{
                           maxHeight:    isCollapsing ? 0 : 1000,
                           opacity:      isCollapsing ? 0 : 1,
@@ -446,8 +407,7 @@ export default function FeedScreen() {
                           post={post}
                           currentUserId={user?.id}
                           isForYou={tab === 'foryou' && !!user}
-                          isLive={tab === 'live'}
-                          expiryAllowed={expiryGoIds.has(post.id)}
+                          livePosition={tab === 'live' ? index : null}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
                           onExpireStart={handleExpireStart}
