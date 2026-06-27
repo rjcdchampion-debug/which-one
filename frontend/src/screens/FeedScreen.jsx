@@ -64,6 +64,9 @@ export default function FeedScreen() {
   const [collapsingPostIds, setCollapsingPostIds] = useState(new Set())
   // Live tab expiry animation
   const [expiringPostIds, setExpiringPostIds] = useState(new Set())
+  const [expiryGoIds, setExpiryGoIds]         = useState(new Set()) // posts allowed to run sequence now
+  const expiryQueueRef  = useRef([])   // postIds waiting their turn
+  const expiryActiveRef = useRef(false) // true while an animation is running
   const collapseTimersRef = useRef({})
 
   const channelRef = useRef(null)
@@ -102,6 +105,9 @@ export default function FeedScreen() {
     setAnimatingPostIds(new Set())
     setCollapsingPostIds(new Set())
     setExpiringPostIds(new Set())
+    setExpiryGoIds(new Set())
+    expiryQueueRef.current = []
+    expiryActiveRef.current = false
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
     collapseTimersRef.current = {}
   }, [tab])
@@ -167,18 +173,31 @@ export default function FeedScreen() {
     collapseTimersRef.current[postId] = tid
   }
 
-  // Live tab: called immediately when client timer hits 0 (keeps post in DOM during animation)
+  // Live tab: PostCard signals expiry — keep post in DOM and queue it
   function handleExpireStart(postId) {
     setExpiringPostIds(prev => new Set([...prev, postId]))
+    expiryQueueRef.current.push(postId)
+    if (!expiryActiveRef.current) drainExpiryQueue()
   }
 
-  // Live tab: called after 3.5s hold, triggers the same 2s fade + 0.4s collapse as voting
+  // Dequeue next post and grant it permission to run its winner sequence
+  function drainExpiryQueue() {
+    const postId = expiryQueueRef.current.shift()
+    if (!postId) { expiryActiveRef.current = false; return }
+    expiryActiveRef.current = true
+    setExpiryGoIds(prev => new Set([...prev, postId]))
+  }
+
+  // Live tab: PostCard finished 3s hold — start collapse, then process next in queue
   function handlePostExpire(postId) {
+    setExpiryGoIds(prev => { const s = new Set(prev); s.delete(postId); return s })
     setCollapsingPostIds(prev => new Set([...prev, postId]))
     const tid = setTimeout(() => {
       setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       delete collapseTimersRef.current[`exp_${postId}`]
+      // 0.5s pause before starting the next expiry animation
+      setTimeout(drainExpiryQueue, 500)
     }, 2700)
     collapseTimersRef.current[`exp_${postId}`] = tid
   }
@@ -408,6 +427,7 @@ export default function FeedScreen() {
                           currentUserId={user?.id}
                           isForYou={tab === 'foryou' && !!user}
                           isLive={tab === 'live'}
+                          expiryAllowed={expiryGoIds.has(post.id)}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
                           onExpireStart={handleExpireStart}

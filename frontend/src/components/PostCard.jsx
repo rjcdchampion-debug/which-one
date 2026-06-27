@@ -72,8 +72,9 @@ export default function PostCard({
   isMyPostsView = false,
   // Live tab expiry animation
   isLive = false,
-  onExpireStart,   // called immediately when client timer hits 0
-  onPostExpire,    // called after 3.5s hold, triggers collapse in FeedScreen
+  expiryAllowed = false, // FeedScreen grants permission to start sequence (prevents simultaneous animations)
+  onExpireStart,         // called immediately when client timer hits 0 — queues post in FeedScreen
+  onPostExpire,          // called after 3s hold — triggers collapse in FeedScreen
 }) {
   const navigate    = useNavigate()
   const { session } = useAuth()
@@ -92,9 +93,9 @@ export default function PostCard({
   // Prevents double-tap before React re-renders with voted=true
   const votingRef = useRef(false)
   // Live tab expiry
-  const [expiryPhase, setExpiryPhase]     = useState('none') // 'none' | 'revealing' | 'done'
-  const [decisionOpacity, setDecisionOpacity] = useState(0)
-  const expiryFiredRef = useRef(false)
+  const [expiryPhase, setExpiryPhase] = useState('none') // 'none' | 'revealing' | 'done'
+  const expireSignaledRef = useRef(false) // prevents calling onExpireStart twice
+  const expiryFiredRef    = useRef(false) // prevents running sequence twice
 
   useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), [])
 
@@ -103,14 +104,14 @@ export default function PostCard({
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
 
-  // Live tab: watch for client-side expiry and run the winner reveal sequence
+  // Live tab: detect when this post expires and signal the parent to queue it
   useEffect(() => {
     if (!isLive) return
     function tick() {
       const s = Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
-      if (s === 0 && !expiryFiredRef.current) {
-        expiryFiredRef.current = true
-        runExpirySequence()
+      if (s === 0 && !expireSignaledRef.current) {
+        expireSignaledRef.current = true
+        onExpireStart?.(post.id) // FeedScreen queues; grants expiryAllowed when it's our turn
       }
     }
     tick()
@@ -118,15 +119,21 @@ export default function PostCard({
     return () => clearInterval(id)
   }, [post.expires_at, isLive])
 
+  // FeedScreen grants permission when it's this post's turn in the queue
+  useEffect(() => {
+    if (expiryAllowed && !expiryFiredRef.current) {
+      expiryFiredRef.current = true
+      runExpirySequence()
+    }
+  }, [expiryAllowed])
+
   function runExpirySequence() {
-    onExpireStart?.(post.id)               // immediately keeps post in Live filter
     setExpiryPhase('revealing')
-    addTimeout(() => setDecisionOpacity(1), 30)  // trigger 0.5s fade-in
-    // After 3.5s (0.5s fade + 3s hold) start card collapse
+    // Hold winner state for 3s, then signal FeedScreen to start collapse
     addTimeout(() => {
       setExpiryPhase('done')
       onPostExpire?.(post.id)
-    }, 3500)
+    }, 3000)
   }
 
   const options  = post.options || []
@@ -310,8 +317,9 @@ export default function PostCard({
                         : showResults && isWinner
                           ? `0 0 0 2.5px ${accentColor}`
                           : undefined,
-                      opacity: showResults && !isWinner ? 0.72 : 1,
-                      transition: 'box-shadow 0.4s ease',
+                      opacity: clientExpired && !isWinner ? 0.70 : showResults && !isWinner ? 0.72 : 1,
+                      filter: clientExpired && isWinner ? 'brightness(1.1) saturate(1.2)' : undefined,
+                      transition: 'box-shadow 0.4s ease, opacity 0.6s ease, filter 0.6s ease',
                     }}
                   >
                     {option.photo_url ? (
@@ -346,10 +354,12 @@ export default function PostCard({
                         </div>
                       </div>
                     )}
-                    {/* Winner badge — appears when post expires on Live tab */}
+                    {/* Winner badge — top-centre of the winning photo */}
                     {clientExpired && isWinner && (
-                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full text-[10px] font-bold text-white"
-                        style={{ background: '#854F0B' }}>
+                      <div
+                        className="absolute top-2 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white"
+                        style={{ background: '#854F0B', whiteSpace: 'nowrap' }}
+                      >
                         Winner 🏆
                       </div>
                     )}
@@ -459,22 +469,6 @@ export default function PostCard({
           </div>
         )}
       </div>
-
-      {/* Expiry overlay — 'Decision made' fades in over 0.5s when Live post expires */}
-      {expiryPhase !== 'none' && (
-        <div
-          className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"
-          style={{ opacity: decisionOpacity, transition: 'opacity 0.5s ease' }}
-        >
-          <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.72)' }} />
-          <div
-            className="relative px-5 py-3 rounded-xl text-center"
-            style={{ background: 'rgba(26,26,26,0.82)' }}
-          >
-            <p className="text-white text-sm font-semibold tracking-wide">Decision made</p>
-          </div>
-        </div>
-      )}
 
       {showExtendModal && (
         <PaymentModal
