@@ -301,11 +301,18 @@ async function createSeedPost(userId, category, mode) {
     ai_verdict_paid: true,  // seed posts always show the AI strip as demo content
   }
 
-  const { data: post, error: postErr } = await supabase
+  let { data: post, error: postErr } = await supabase
     .from('posts')
     .insert(postData)
     .select()
     .single()
+
+  // If column doesn't exist yet (migration pending), retry without it
+  if (postErr?.message?.includes('ai_verdict_paid')) {
+    const { ai_verdict_paid: _ignored, ...fallbackData } = postData
+    ;({ data: post, error: postErr } = await supabase
+      .from('posts').insert(fallbackData).select().single())
+  }
 
   if (postErr || !post) {
     console.error('Failed to create seed post:', postErr)
