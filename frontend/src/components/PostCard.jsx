@@ -80,10 +80,13 @@ export default function PostCard({
   const [voted, setVoted]                 = useState(() => initialVotedOptionId ? true : hasVoted(initialPost.id))
   const [votedOptionId, setVotedOptionId] = useState(() => initialVotedOptionId || getVotedOption(initialPost.id))
   const [showExtendModal, setShowExtendModal] = useState(false)
-  const [voting, setVoting]               = useState(false)
   const [shareCount, setShareCount]       = useState(initialPost.share_count || 0)
   const [shareCopied, setShareCopied]     = useState(false)
   const [showVoteMessage, setShowVoteMessage] = useState(false)
+  const [msgOpacity, setMsgOpacity]       = useState(0)
+  const [voteError, setVoteError]         = useState(false)
+  // Prevents double-tap before React re-renders with voted=true
+  const votingRef = useRef(false)
 
   useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), [])
 
@@ -119,57 +122,66 @@ export default function PostCard({
     timeoutsRef.current.push(id)
   }
 
+  // Animation phases (all times relative to tap):
+  // t=0    → immediate optimistic highlight
+  // t=0→1s → bars animate in (CSS duration-1000)
+  // t=1→4s → 3-second results hold
+  // t=4→5s → "Vote logged" fades in (1s)
+  // t=5s   → onVoteAnimationComplete: FeedScreen starts 2s card fade + delayed 0.4s height collapse
   function startForYouAnimation(postId) {
     onVoteStart?.(postId)
-    // Wait 500ms for vote bars to animate in, then show the message overlay.
-    // The overlay runs a CSS animation: 0.4s fade-in → 2s hold → 0.4s fade-out = 2.8s total.
     addTimeout(() => {
       setShowVoteMessage(true)
-      addTimeout(() => {
-        setShowVoteMessage(false)
-        onVoteAnimationComplete?.(postId)
-      }, 2800)
-    }, 500)
+      // Next frame: trigger the opacity CSS transition for fade-in
+      addTimeout(() => setMsgOpacity(1), 30)
+      // After 1s fade-in, signal FeedScreen to begin collapse (2s opacity + 0.4s height with 2s delay)
+      addTimeout(() => onVoteAnimationComplete?.(postId), 1000)
+    }, 4000)
   }
 
-  async function handleVote(optionId) {
-    if (voting || voted || isClosed || isMyPostsView) return
-    setVoting(true)
-    try {
-      const { post: updated } = await api.castVote(
-        { post_id: post.id, option_id: optionId, voter_id: voterId },
-        session?.access_token
-      )
-      recordVote(post.id, optionId)
-      setVoted(true)
-      setVotedOptionId(optionId)
-      onVote?.()
-      if (updated?.options) setPost(prev => ({ ...prev, options: updated.options }))
-      else {
-        setPost(prev => ({
-          ...prev,
-          options: prev.options.map(o =>
-            o.id === optionId ? { ...o, vote_count: (o.vote_count || 0) + 1 } : o
-          ),
-        }))
-      }
-      if (isForYou) startForYouAnimation(post.id)
-    } catch (err) {
-      console.warn('Vote failed:', err.message)
-      recordVote(post.id, optionId)
-      setVoted(true)
-      setVotedOptionId(optionId)
-      onVote?.()
-      setPost(prev => ({
-        ...prev,
-        options: prev.options.map(o =>
-          o.id === optionId ? { ...o, vote_count: (o.vote_count || 0) + 1 } : o
-        ),
-      }))
-      if (isForYou) startForYouAnimation(post.id)
-    } finally {
-      setVoting(false)
-    }
+  function handleVote(optionId) {
+    if (votingRef.current || voted || isClosed || isMyPostsView) return
+    votingRef.current = true
+
+    // 1. Immediate optimistic update — no API wait
+    recordVote(post.id, optionId)
+    setVoted(true)
+    setVotedOptionId(optionId)
+    setPost(prev => ({
+      ...prev,
+      options: prev.options.map(o =>
+        o.id === optionId ? { ...o, vote_count: (o.vote_count || 0) + 1 } : o
+      ),
+    }))
+    onVote?.()
+
+    if (isForYou) startForYouAnimation(post.id)
+
+    // 2. Fire API in background; update with server counts on success; show error on failure
+    api.castVote(
+      { post_id: post.id, option_id: optionId, voter_id: voterId },
+      session?.access_token
+    )
+      .then(({ post: updated }) => {
+        if (updated?.options) setPost(prev => ({ ...prev, options: updated.options }))
+      })
+      .catch(err => {
+        console.warn('Vote failed:', err.message)
+        setVoteError(true)
+      })
+  }
+
+  function handleRetryVote() {
+    if (!votedOptionId) return
+    setVoteError(false)
+    api.castVote(
+      { post_id: post.id, option_id: votedOptionId, voter_id: voterId },
+      session?.access_token
+    )
+      .then(({ post: updated }) => {
+        if (updated?.options) setPost(prev => ({ ...prev, options: updated.options }))
+      })
+      .catch(() => setVoteError(true))
   }
 
   async function handleShare() {
@@ -288,7 +300,7 @@ export default function PostCard({
                         </div>
                         <div className="mt-1 h-1 rounded-full bg-white/30">
                           <div
-                            className="h-full rounded-full transition-all duration-700"
+                            className="h-full rounded-full transition-all duration-1000"
                             style={{ width: `${pct}%`, background: isWinner ? accentColor : 'white' }}
                           />
                         </div>
@@ -374,19 +386,29 @@ export default function PostCard({
           )}
         </div>
 
-        {/* Vote-logged overlay — fades in/out via voteMsgCycle keyframe */}
+        {/* Vote message overlay — fades in via state-driven opacity (1s ease) */}
         {showVoteMessage && (
           <div
-            className="absolute inset-0 flex items-center justify-center z-30"
-            style={{ animation: 'voteMsgCycle 2.8s ease forwards' }}
+            className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"
+            style={{ opacity: msgOpacity, transition: 'opacity 1s ease' }}
           >
             <div className="absolute inset-0" style={{ background: 'rgba(255,255,255,0.88)' }} />
-            <div className="relative px-6 py-4 bg-[#534AB7] rounded-2xl shadow-xl text-center">
-              <p className="text-white text-sm font-semibold">Vote logged!</p>
-              <p className="text-white/90 text-xs mt-1">
-                Thanks from {post.users?.username || 'them'} 🙏
-              </p>
-            </div>
+            {voteError ? (
+              <button
+                className="relative px-6 py-4 bg-[#993C1D] rounded-2xl shadow-xl text-center pointer-events-auto"
+                onClick={handleRetryVote}
+              >
+                <p className="text-white text-sm font-semibold">Something went wrong</p>
+                <p className="text-white/90 text-xs mt-1">Tap to try again</p>
+              </button>
+            ) : (
+              <div className="relative px-6 py-4 bg-[#534AB7] rounded-2xl shadow-xl text-center">
+                <p className="text-white text-sm font-semibold">Vote logged!</p>
+                <p className="text-white/90 text-xs mt-1">
+                  Thanks from {post.users?.username || 'them'} 🙏
+                </p>
+              </div>
+            )}
           </div>
         )}
       </div>

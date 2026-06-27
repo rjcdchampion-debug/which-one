@@ -156,11 +156,11 @@ export default function FeedScreen() {
   function handleVoteAnimationComplete(postId) {
     setAnimatingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
     setCollapsingPostIds(prev => new Set([...prev, postId]))
-    // After CSS transition (0.8s), hasVoted filter naturally excludes the post
+    // After fade (2s) + height collapse (0.4s) = 2.4s; give 300ms buffer
     const tid = setTimeout(() => {
       setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       delete collapseTimersRef.current[postId]
-    }, 900)
+    }, 2700)
     collapseTimersRef.current[postId] = tid
   }
 
@@ -379,7 +379,8 @@ export default function FeedScreen() {
                           overflow:     'hidden',
                           marginBottom: isCollapsing ? -12 : undefined,
                           transition:   isCollapsing
-                            ? 'max-height 0.8s ease-in, opacity 0.5s ease, margin-bottom 0.8s ease'
+                            // Card fades over 2s; height collapses 0.4s after the fade completes
+                            ? 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s'
                             : undefined,
                         }}
                       >
