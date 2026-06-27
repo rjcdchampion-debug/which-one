@@ -64,7 +64,7 @@ export default function FeedScreen() {
   const [collapsingPostIds, setCollapsingPostIds] = useState(new Set())
   const collapseTimersRef = useRef({})
 
-  // Live expiry queue
+  // Live expiry queue (main feed)
   const expiryQueueRef      = useRef([])
   const animatingPostIdRef  = useRef(null)
   const expiryTimersRef     = useRef([])
@@ -73,6 +73,11 @@ export default function FeedScreen() {
   const [expiryPhase, setExpiryPhase]                 = useState('none')
   const [expiringPostIds, setExpiringPostIds]         = useState(new Set())
   const [expiryCollapsingIds, setExpiryCollapsingIds] = useState(new Set())
+
+  // Live strip expiry (fade + slide left)
+  const stripTimersRef = useRef([])
+  const [fadingStripIds, setFadingStripIds]       = useState(new Set())
+  const [collapsingStripIds, setCollapsingStripIds] = useState(new Set())
 
   // Ref so the expiry checker interval always sees fresh posts without a re-render cycle
   const postsRef = useRef(posts)
@@ -115,7 +120,7 @@ export default function FeedScreen() {
     setCollapsingPostIds(new Set())
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
     collapseTimersRef.current = {}
-    // Clear expiry queue
+    // Clear expiry queue (main feed)
     expiryTimersRef.current.forEach(clearTimeout)
     expiryTimersRef.current = []
     expiryQueueRef.current = []
@@ -125,6 +130,11 @@ export default function FeedScreen() {
     setExpiryPhase('none')
     setExpiringPostIds(new Set())
     setExpiryCollapsingIds(new Set())
+    // Clear strip expiry
+    stripTimersRef.current.forEach(clearTimeout)
+    stripTimersRef.current = []
+    setFadingStripIds(new Set())
+    setCollapsingStripIds(new Set())
   }, [tab])
 
   // Client-side expiry checker: triggers animation when a live post's timer hits 0
@@ -209,6 +219,19 @@ export default function FeedScreen() {
       delete collapseTimersRef.current[postId]
     }, 2700)
     collapseTimersRef.current[postId] = tid
+  }
+
+  function handleStripExpire(postId) {
+    setFadingStripIds(prev => new Set([...prev, postId]))
+    const t1 = setTimeout(() => {
+      setFadingStripIds(prev => { const s = new Set(prev); s.delete(postId); return s })
+      setCollapsingStripIds(prev => new Set([...prev, postId]))
+    }, 800)
+    const t2 = setTimeout(() => {
+      setCollapsingStripIds(prev => { const s = new Set(prev); s.delete(postId); return s })
+      setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'closed' } : p))
+    }, 1200)
+    stripTimersRef.current.push(t1, t2)
   }
 
   function startNextExpiry() {
@@ -436,10 +459,34 @@ export default function FeedScreen() {
                     <Zap size={13} className="text-[#993C1D]" fill="#993C1D" />
                     <span className="text-xs font-bold text-[#993C1D] uppercase tracking-wide">Live now</span>
                   </div>
-                  <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1 px-4">
-                    {realtimePosts.map(post => (
-                      <LiveCard key={post.id} post={post} onOpen={() => navigate(`/post/${post.id}`)} />
-                    ))}
+                  <div className="flex overflow-x-auto scrollbar-hide pb-1 px-4">
+                    {realtimePosts.map(post => {
+                      const isFading     = fadingStripIds.has(post.id)
+                      const isCollapsing = collapsingStripIds.has(post.id)
+                      return (
+                        <div
+                          key={post.id}
+                          style={{
+                            flexShrink: 0,
+                            overflow: 'hidden',
+                            opacity:    isFading ? 0 : 1,
+                            maxWidth:   isCollapsing ? 0 : 172,
+                            paddingRight: isCollapsing ? 0 : 12,
+                            transition: isFading
+                              ? 'opacity 0.8s ease'
+                              : isCollapsing
+                                ? 'max-width 0.4s ease, padding-right 0.4s ease'
+                                : undefined,
+                          }}
+                        >
+                          <LiveCard
+                            post={post}
+                            onOpen={() => navigate(`/post/${post.id}`)}
+                            onExpire={handleStripExpire}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 </section>
               )}
@@ -579,11 +626,12 @@ function MyVotesContent({ myVotes, myVotesStats, user, navigate }) {
   )
 }
 
-function LiveCard({ post, onOpen }) {
+function LiveCard({ post, onOpen, onExpire }) {
   const options    = post.options || []
   const totalVotes = options.reduce((s, o) => s + (o.vote_count || 0), 0)
   const [activeIdx, setActiveIdx] = useState(0)
   const [visible, setVisible]     = useState(true)
+  const hasFiredRef = useRef(false)
 
   useEffect(() => {
     if (options.length < 2) return
@@ -596,6 +644,25 @@ function LiveCard({ post, onOpen }) {
     }, 3500)
     return () => clearInterval(id)
   }, [options.length])
+
+  // Independent countdown — fires onExpire the moment expires_at passes
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!hasFiredRef.current && new Date(post.expires_at) <= new Date()) {
+        hasFiredRef.current = true
+        onExpire?.(post.id)
+      }
+    }, 1000)
+    return () => clearInterval(id)
+  }, [post.expires_at, post.id])
+
+  // Also react immediately if realtime marks status closed
+  useEffect(() => {
+    if (post.status === 'closed' && !hasFiredRef.current) {
+      hasFiredRef.current = true
+      onExpire?.(post.id)
+    }
+  }, [post.status])
 
   const cover    = options[activeIdx]?.photo_url
   const optLabel = String.fromCharCode(65 + activeIdx)
