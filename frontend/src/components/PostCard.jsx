@@ -70,6 +70,8 @@ export default function PostCard({
   initialVotedOptionId = null,
   // My Posts: always show results + enhancements
   isMyPostsView = false,
+  // Live expiry animation phase
+  expiryPhase = 'none', // 'none' | 'winner' | 'fading'
 }) {
   const navigate    = useNavigate()
   const { session } = useAuth()
@@ -110,7 +112,8 @@ export default function PostCard({
   const totalVotes = options.reduce((s, o) => s + humanCount(o), 0)
   const winningId  = options.reduce((mx, o) => (!mx || humanCount(o) > humanCount(mx) ? o : mx), null)?.id
 
-  const showResults  = voted || isClosed || isMyPostsView
+  const clientExpired = expiryPhase !== 'none'
+  const showResults  = voted || isClosed || isMyPostsView || clientExpired
   const isOwner      = currentUserId && post.user_id === currentUserId
   const isRealtime   = post.mode === 'realtime'
   const msLeft       = new Date(post.expires_at) - Date.now()
@@ -214,7 +217,11 @@ export default function PostCard({
     <>
       <div
         className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden relative"
-        style={{ borderWidth: '0.5px' }}
+        style={{
+          borderWidth: '0.5px',
+          opacity: expiryPhase === 'fading' ? 0 : 1,
+          transition: expiryPhase === 'fading' ? 'opacity 2s ease' : undefined,
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -240,8 +247,8 @@ export default function PostCard({
               <span className="px-2 py-0.5 bg-[#534AB7]/10 text-[#534AB7] rounded-full text-[10px] font-semibold whitespace-nowrap">
                 Decision made
               </span>
-            ) : isRealtime && !isClosed ? (
-              <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
+            ) : isRealtime && (!isClosed || clientExpired) ? (
+              <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" showThumbsUp={clientExpired} />
             ) : (
               <span className="text-xs text-[#6B6B6B] font-medium">
                 {isClosed ? 'Closed' : hoursLeft(post.expires_at)}
@@ -267,11 +274,13 @@ export default function PostCard({
                   <button
                     key={option.id}
                     onClick={() => handleVote(option.id)}
-                    disabled={voted || isClosed || isMyPostsView}
+                    disabled={voted || isClosed || isMyPostsView || clientExpired}
                     className="relative rounded-lg overflow-hidden focus:outline-none active:opacity-80 transition-opacity"
                     style={{
-                      boxShadow: showResults && isWinner ? `0 0 0 2.5px ${accentColor}` : undefined,
-                      opacity:   showResults && !isWinner ? 0.72 : 1,
+                      boxShadow: showResults && isWinner
+                        ? `0 0 0 2.5px ${clientExpired ? '#854F0B' : accentColor}`
+                        : undefined,
+                      opacity: showResults && !isWinner ? (clientExpired ? 0.45 : 0.72) : 1,
                     }}
                   >
                     {option.photo_url ? (
@@ -309,6 +318,11 @@ export default function PostCard({
                     {isMyVote && (
                       <div className="absolute top-2 right-2 bg-white/90 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-[#534AB7]">
                         Your vote
+                      </div>
+                    )}
+                    {clientExpired && isWinner && (
+                      <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-[#854F0B] text-white text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap">
+                        Winner
                       </div>
                     )}
                   </button>

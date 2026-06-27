@@ -64,6 +64,20 @@ export default function FeedScreen() {
   const [collapsingPostIds, setCollapsingPostIds] = useState(new Set())
   const collapseTimersRef = useRef({})
 
+  // Live expiry queue
+  const expiryQueueRef      = useRef([])
+  const animatingPostIdRef  = useRef(null)
+  const expiryTimersRef     = useRef([])
+  const processedPostIdsRef = useRef(new Set()) // updated synchronously — no render lag
+  const [animatingPostId, setAnimatingPostId]         = useState(null)
+  const [expiryPhase, setExpiryPhase]                 = useState('none')
+  const [expiringPostIds, setExpiringPostIds]         = useState(new Set())
+  const [expiryCollapsingIds, setExpiryCollapsingIds] = useState(new Set())
+
+  // Ref so the expiry checker interval always sees fresh posts without a re-render cycle
+  const postsRef = useRef(posts)
+  useEffect(() => { postsRef.current = posts }, [posts])
+
   const channelRef = useRef(null)
 
   // Reload when tab or auth token changes
@@ -101,6 +115,36 @@ export default function FeedScreen() {
     setCollapsingPostIds(new Set())
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
     collapseTimersRef.current = {}
+    // Clear expiry queue
+    expiryTimersRef.current.forEach(clearTimeout)
+    expiryTimersRef.current = []
+    expiryQueueRef.current = []
+    processedPostIdsRef.current = new Set()
+    animatingPostIdRef.current = null
+    setAnimatingPostId(null)
+    setExpiryPhase('none')
+    setExpiringPostIds(new Set())
+    setExpiryCollapsingIds(new Set())
+  }, [tab])
+
+  // Client-side expiry checker: triggers animation when a live post's timer hits 0
+  // without waiting for the backend cron + realtime event
+  useEffect(() => {
+    if (tab !== 'live') return
+    const id = setInterval(() => {
+      const now = Date.now()
+      postsRef.current.forEach(p => {
+        if (
+          p.mode === 'realtime' &&
+          p.status === 'active' &&
+          new Date(p.expires_at) <= now &&
+          !processedPostIdsRef.current.has(p.id)
+        ) {
+          addToExpiryQueue(p.id)
+        }
+      })
+    }, 1000)
+    return () => clearInterval(id)
   }, [tab])
 
   // Supabase realtime subscription
@@ -132,6 +176,9 @@ export default function FeedScreen() {
         setPosts(prev => prev.map(p =>
           p.id === payload.new.id ? { ...p, status: payload.new.status, expires_at: payload.new.expires_at } : p
         ))
+        if (payload.new.status === 'closed' && payload.new.mode === 'realtime') {
+          addToExpiryQueue(payload.new.id)
+        }
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_verdicts' }, async (payload) => {
         const postId = payload.new.post_id
@@ -164,8 +211,46 @@ export default function FeedScreen() {
     collapseTimersRef.current[postId] = tid
   }
 
+  function startNextExpiry() {
+    const postId = expiryQueueRef.current.shift()
+    if (!postId) {
+      animatingPostIdRef.current = null
+      setAnimatingPostId(null)
+      return
+    }
+    animatingPostIdRef.current = postId
+    setAnimatingPostId(postId)
+    setExpiringPostIds(prev => new Set([...prev, postId]))
+    setExpiryPhase('winner')
+    // After 3s winner hold: start 2s fade
+    const t1 = setTimeout(() => setExpiryPhase('fading'), 3000)
+    // After 5s (3s + 2s fade): collapse height
+    const t2 = setTimeout(() => {
+      setExpiryPhase('none')
+      setExpiryCollapsingIds(prev => new Set([...prev, postId]))
+    }, 5000)
+    // After 5.4s: remove from DOM, start next
+    const t3 = setTimeout(() => {
+      setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
+      setExpiryCollapsingIds(prev => { const s = new Set(prev); s.delete(postId); return s })
+      animatingPostIdRef.current = null
+      startNextExpiry()
+    }, 5400)
+    expiryTimersRef.current.push(t1, t2, t3)
+  }
+
+  function addToExpiryQueue(postId) {
+    // Guard synchronously — no React render cycle needed, safe on slow mobile
+    if (processedPostIdsRef.current.has(postId)) return
+    processedPostIdsRef.current.add(postId)
+    expiryQueueRef.current.push(postId)
+    // Mark closed in local state so the main filter drops it after animation ends
+    setPosts(prev => prev.map(p => p.id === postId ? { ...p, status: 'closed' } : p))
+    if (!animatingPostIdRef.current) startNextExpiry()
+  }
+
   const filterByCat = (arr) =>
-    catFilter === 'all' ? arr : arr.filter(p => p.category === catFilter)
+    catFilter === 'all' ? arr : arr.filter(p => expiringPostIds.has(p.id) || p.category === catFilter)
 
   // Live strip: top 3 urgency-sorted realtime posts.
   // On For You tab, exclude posts the logged-in user already voted on.
@@ -183,7 +268,7 @@ export default function FeedScreen() {
   const mainPosts = tab === 'myvotes' ? [] : filterByCat(
     posts
       .filter(p => {
-        if (tab === 'live') return p.mode === 'realtime' && p.status === 'active'
+        if (tab === 'live') return (p.mode === 'realtime' && p.status === 'active') || expiringPostIds.has(p.id)
         if (tab === 'mine') return true
         // For You: exclude live-strip posts; exclude voted posts unless mid-animation
         if (realtimePosts.includes(p)) return false
@@ -369,27 +454,34 @@ export default function FeedScreen() {
                   )
                 ) : (
                   mainPosts.map(post => {
-                    const isCollapsing = collapsingPostIds.has(post.id)
+                    const isForYouCollapsing = collapsingPostIds.has(post.id)
+                    const isLiveCollapsing   = expiryCollapsingIds.has(post.id)
+                    const isExpiring         = expiringPostIds.has(post.id)
+
+                    let wrapperStyle
+                    if (isForYouCollapsing) {
+                      wrapperStyle = {
+                        maxHeight: 0, opacity: 0, overflow: 'hidden', marginBottom: -12,
+                        transition: 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s',
+                      }
+                    } else if (isLiveCollapsing) {
+                      wrapperStyle = {
+                        maxHeight: 0, overflow: 'hidden', marginBottom: -12,
+                        transition: 'max-height 0.4s ease-in, margin-bottom 0.4s ease',
+                      }
+                    } else {
+                      wrapperStyle = { overflow: 'hidden', maxHeight: 2000 }
+                    }
+
                     return (
-                      <div
-                        key={post.id}
-                        style={{
-                          maxHeight:    isCollapsing ? 0 : 1000,
-                          opacity:      isCollapsing ? 0 : 1,
-                          overflow:     'hidden',
-                          marginBottom: isCollapsing ? -12 : undefined,
-                          transition:   isCollapsing
-                            // Card fades over 2s; height collapses 0.4s after the fade completes
-                            ? 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s'
-                            : undefined,
-                        }}
-                      >
+                      <div key={post.id} style={wrapperStyle}>
                         <PostCard
                           post={post}
                           currentUserId={user?.id}
                           isForYou={tab === 'foryou' && !!user}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
+                          expiryPhase={isExpiring && post.id === animatingPostId ? expiryPhase : 'none'}
                         />
                       </div>
                     )

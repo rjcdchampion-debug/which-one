@@ -46,13 +46,15 @@ app.use((err, _req, res, _next) => {
 // ── Post expiry background job ─────────────────────────────────────────────────
 
 async function expirePostsJob() {
-  const { error } = await supabase
+  console.log('[expiry job] running —', new Date().toISOString())
+  const { data, error } = await supabase
     .from('posts')
     .update({ status: 'closed' })
     .eq('status', 'active')
     .lt('expires_at', new Date().toISOString())
-
-  if (error) console.error('[expiry job]', error.message)
+    .select('id')
+  if (error) console.error('[expiry job] error:', error.message)
+  else console.log(`[expiry job] closed ${data?.length || 0} posts`)
 }
 
 setInterval(expirePostsJob, 60_000)
