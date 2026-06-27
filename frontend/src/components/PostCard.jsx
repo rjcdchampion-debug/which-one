@@ -93,8 +93,11 @@ export default function PostCard({
   // Prevents double-tap before React re-renders with voted=true
   const votingRef = useRef(false)
   // Live tab expiry
-  const [expiryPhase, setExpiryPhase] = useState('none') // 'none' | 'revealing' | 'done'
-  const [timerReady, setTimerReady]   = useState(false)  // false until 500ms after mount (gates urgency animations)
+  const [expiryPhase, setExpiryPhase]   = useState('none') // 'none' | 'revealing' | 'done'
+  // Slide-in: Live cards start invisible and slide up after fetching fresh data
+  const [slideVisible, setSlideVisible] = useState(!isLive)
+  const [fetchingTimer, setFetchingTimer] = useState(isLive)
+  const [timerReady, setTimerReady]     = useState(false)
   const expireSignaledRef = useRef(false) // prevents calling onExpireStart twice
   const expiryFiredRef    = useRef(false) // prevents running sequence twice
 
@@ -105,13 +108,41 @@ export default function PostCard({
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
 
-  // Hold urgency animations for 500ms after the card mounts or the post changes,
-  // so a newly promoted card doesn't fire urgency the instant it slides into view.
+  // Live cards: fetch fresh expires_at from DB on mount, then slide in.
+  // This prevents any stale or inherited timer state when a card is promoted to top.
   useEffect(() => {
     if (!isLive) return
+    let cancelled = false
+    setFetchingTimer(true)
+    setSlideVisible(false)
     setTimerReady(false)
-    const t = setTimeout(() => setTimerReady(true), 500)
-    return () => clearTimeout(t)
+
+    api.getPost(post.id)
+      .then(data => {
+        if (cancelled) return
+        // Only update expires_at — keep vote counts etc. from the live prop stream
+        if (data?.post?.expires_at) {
+          setPost(prev => ({ ...prev, expires_at: data.post.expires_at }))
+        }
+        setFetchingTimer(false)
+        // Next frame: trigger the CSS slide-in transition
+        requestAnimationFrame(() => {
+          if (!cancelled) setSlideVisible(true)
+        })
+        // After slide-in (0.4s) + 0.5s hold = 0.9s before urgency animations start
+        const t = setTimeout(() => { if (!cancelled) setTimerReady(true) }, 900)
+        timeoutsRef.current.push(t)
+      })
+      .catch(() => {
+        if (cancelled) return
+        // On fetch failure fall back gracefully: show card and use existing expires_at
+        setFetchingTimer(false)
+        requestAnimationFrame(() => { if (!cancelled) setSlideVisible(true) })
+        const t = setTimeout(() => { if (!cancelled) setTimerReady(true) }, 900)
+        timeoutsRef.current.push(t)
+      })
+
+    return () => { cancelled = true }
   }, [isLive, post.id])
 
   // Live tab: detect when this post expires and signal the parent to queue it
@@ -266,7 +297,13 @@ export default function PostCard({
     <>
       <div
         className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden relative"
-        style={{ borderWidth: '0.5px' }}
+        style={{
+          borderWidth: '0.5px',
+          // Live cards slide up from below after fetching fresh data
+          opacity:    isLive ? (slideVisible ? 1 : 0) : 1,
+          transform:  isLive ? (slideVisible ? 'translateY(0)' : 'translateY(16px)') : undefined,
+          transition: isLive && slideVisible ? 'opacity 0.4s ease, transform 0.4s ease' : undefined,
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -299,6 +336,7 @@ export default function PostCard({
                 totalMinutes={15}
                 size="sm"
                 ready={timerReady}
+                loading={fetchingTimer}
               />
             ) : (
               <span className="text-xs text-[#6B6B6B] font-medium">

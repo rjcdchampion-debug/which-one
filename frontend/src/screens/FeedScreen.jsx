@@ -65,9 +65,14 @@ export default function FeedScreen() {
   // Live tab expiry animation
   const [expiringPostIds, setExpiringPostIds] = useState(new Set())
   const [expiryGoIds, setExpiryGoIds]         = useState(new Set()) // posts allowed to run sequence now
+  const [liveRemountKeys, setLiveRemountKeys] = useState({}) // {postId: uniqueKey} — changing key forces remount
   const expiryQueueRef  = useRef([])   // postIds waiting their turn
   const expiryActiveRef = useRef(false) // true while an animation is running
   const collapseTimersRef = useRef({})
+
+  // Ref so setTimeout callbacks can read current posts without stale closure
+  const postsRef = useRef([])
+  useEffect(() => { postsRef.current = posts }, [posts])
 
   const channelRef = useRef(null)
 
@@ -106,6 +111,7 @@ export default function FeedScreen() {
     setCollapsingPostIds(new Set())
     setExpiringPostIds(new Set())
     setExpiryGoIds(new Set())
+    setLiveRemountKeys({})
     expiryQueueRef.current = []
     expiryActiveRef.current = false
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
@@ -196,6 +202,15 @@ export default function FeedScreen() {
       setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
       delete collapseTimersRef.current[`exp_${postId}`]
+
+      // Force-remount the next live card so it mounts fresh and fetches its own timer
+      const nextLive = postsRef.current
+        .filter(p => p.mode === 'realtime' && p.status === 'active' && p.id !== postId)
+        .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))[0]
+      if (nextLive) {
+        setLiveRemountKeys(prev => ({ ...prev, [nextLive.id]: `${nextLive.id}_${Date.now()}` }))
+      }
+
       // 0.5s pause before starting the next expiry animation
       setTimeout(drainExpiryQueue, 500)
     }, 2700)
@@ -408,9 +423,14 @@ export default function FeedScreen() {
                 ) : (
                   mainPosts.map(post => {
                     const isCollapsing = collapsingPostIds.has(post.id)
+                    // Live tab: use a unique key so the next card fully remounts after an expiry,
+                    // ensuring it starts with clean state and fetches its own fresh timer value.
+                    const cardKey = tab === 'live'
+                      ? (liveRemountKeys[post.id] ?? post.id)
+                      : post.id
                     return (
                       <div
-                        key={post.id}
+                        key={cardKey}
                         style={{
                           maxHeight:    isCollapsing ? 0 : 1000,
                           opacity:      isCollapsing ? 0 : 1,

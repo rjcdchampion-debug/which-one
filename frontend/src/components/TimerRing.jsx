@@ -23,8 +23,9 @@ function getSecondsLeft(expiresAt) {
   return Math.max(0, Math.floor((new Date(expiresAt) - Date.now()) / 1000))
 }
 
-// ready = false while the card is sliding into position; gates urgency animations
-export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', ready = true }) {
+// ready   = false while the card is sliding into position; gates urgency animations
+// loading = true while the post is fetching fresh expires_at — shows neutral grey ring, no number
+export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', ready = true, loading = false }) {
   const [secondsLeft, setSecondsLeft] = useState(() => getSecondsLeft(expiresAt))
 
   useEffect(() => {
@@ -59,6 +60,22 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', r
   const urgencyFactor = isUrgent ? (URGENCY_SCALE[secondsLeft] ?? 1.0) : 1.0
   const fontSize      = Math.round(baseFontSize * urgencyFactor)
   const fontWeight    = isUrgent ? Math.min(900, 700 + (10 - secondsLeft) * 22) : 700
+
+  // While loading: neutral grey ring, no number
+  if (loading) {
+    return (
+      <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
+        <svg
+          width={dim}
+          height={dim}
+          viewBox="0 0 80 80"
+          style={{ position: 'absolute', inset: 0, transform: 'rotate(-90deg)' }}
+        >
+          <circle cx="40" cy="40" r={RADIUS} fill="none" stroke="#E5E5E5" strokeWidth="5" />
+        </svg>
+      </div>
+    )
+  }
 
   return (
     <div className="relative flex items-center justify-center" style={{ width: dim, height: dim }}>
