@@ -62,6 +62,8 @@ export default function FeedScreen() {
   // For You disappearing mechanic
   const [animatingPostIds, setAnimatingPostIds] = useState(new Set())
   const [collapsingPostIds, setCollapsingPostIds] = useState(new Set())
+  // Live tab expiry animation
+  const [expiringPostIds, setExpiringPostIds] = useState(new Set())
   const collapseTimersRef = useRef({})
 
   const channelRef = useRef(null)
@@ -99,6 +101,7 @@ export default function FeedScreen() {
     setCatFilter('all')
     setAnimatingPostIds(new Set())
     setCollapsingPostIds(new Set())
+    setExpiringPostIds(new Set())
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
     collapseTimersRef.current = {}
   }, [tab])
@@ -164,6 +167,22 @@ export default function FeedScreen() {
     collapseTimersRef.current[postId] = tid
   }
 
+  // Live tab: called immediately when client timer hits 0 (keeps post in DOM during animation)
+  function handleExpireStart(postId) {
+    setExpiringPostIds(prev => new Set([...prev, postId]))
+  }
+
+  // Live tab: called after 3.5s hold, triggers the same 2s fade + 0.4s collapse as voting
+  function handlePostExpire(postId) {
+    setCollapsingPostIds(prev => new Set([...prev, postId]))
+    const tid = setTimeout(() => {
+      setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
+      setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
+      delete collapseTimersRef.current[`exp_${postId}`]
+    }, 2700)
+    collapseTimersRef.current[`exp_${postId}`] = tid
+  }
+
   const filterByCat = (arr) =>
     catFilter === 'all' ? arr : arr.filter(p => p.category === catFilter)
 
@@ -183,7 +202,7 @@ export default function FeedScreen() {
   const mainPosts = tab === 'myvotes' ? [] : filterByCat(
     posts
       .filter(p => {
-        if (tab === 'live') return p.mode === 'realtime' && p.status === 'active'
+        if (tab === 'live') return (p.mode === 'realtime' && p.status === 'active') || expiringPostIds.has(p.id)
         if (tab === 'mine') return true
         // For You: exclude live-strip posts; exclude voted posts unless mid-animation
         if (realtimePosts.includes(p)) return false
@@ -388,8 +407,11 @@ export default function FeedScreen() {
                           post={post}
                           currentUserId={user?.id}
                           isForYou={tab === 'foryou' && !!user}
+                          isLive={tab === 'live'}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
+                          onExpireStart={handleExpireStart}
+                          onPostExpire={handlePostExpire}
                         />
                       </div>
                     )

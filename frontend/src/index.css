@@ -51,6 +51,12 @@
   to   { opacity: 1; transform: scale(1); }
 }
 
+/* Live timer urgency: ring alternates between full red and translucent red */
+@keyframes pulseRing {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.28; }
+}
+
 /* Vote-logged message overlay: fade in → hold → fade out */
 @keyframes voteMsgCycle {
   0%     { opacity: 0; }
