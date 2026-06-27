@@ -167,20 +167,14 @@ export default function FeedScreen() {
     collapseTimersRef.current[postId] = tid
   }
 
-  // Live tab: keep expired post in DOM during the winner reveal + collapse animation
+  // Live tab: card reached 0 — keep it in the list while Supabase marks it closed
   function handleExpireStart(postId) {
     setExpiringPostIds(prev => new Set([...prev, postId]))
   }
 
-  // Live tab: 3s hold done — start 2s fade + 0.4s height collapse
-  function handlePostExpire(postId) {
-    setCollapsingPostIds(prev => new Set([...prev, postId]))
-    const tid = setTimeout(() => {
-      setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
-      setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
-      delete collapseTimersRef.current[postId]
-    }, 2700)
-    collapseTimersRef.current[postId] = tid
+  // Live tab: card finished its 5s sequence (3s hold + 2s fade) — remove from list
+  function handleExpire(postId) {
+    setExpiringPostIds(prev => { const s = new Set(prev); s.delete(postId); return s })
   }
 
   const filterByCat = (arr) =>
@@ -387,31 +381,30 @@ export default function FeedScreen() {
                     realtimePosts.length === 0 && <EmptyState tab={tab} onPost={() => navigate('/create')} />
                   )
                 ) : (
-                  mainPosts.map((post, index) => {
+                  mainPosts.map(post => {
                     const isCollapsing = collapsingPostIds.has(post.id)
                     return (
                       <div
                         key={post.id}
-                        style={{
+                        style={tab !== 'live' ? {
                           maxHeight:    isCollapsing ? 0 : 1000,
                           opacity:      isCollapsing ? 0 : 1,
                           overflow:     'hidden',
                           marginBottom: isCollapsing ? -12 : undefined,
                           transition:   isCollapsing
-                            // Card fades over 2s; height collapses 0.4s after the fade completes
                             ? 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s'
                             : undefined,
-                        }}
+                        } : undefined}
                       >
                         <PostCard
                           post={post}
                           currentUserId={user?.id}
                           isForYou={tab === 'foryou' && !!user}
-                          livePosition={tab === 'live' ? index : null}
+                          isLive={tab === 'live'}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
                           onExpireStart={handleExpireStart}
-                          onPostExpire={handlePostExpire}
+                          onExpire={handleExpire}
                         />
                       </div>
                     )

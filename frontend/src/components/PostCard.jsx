@@ -70,10 +70,10 @@ export default function PostCard({
   initialVotedOptionId = null,
   // My Posts: always show results + enhancements
   isMyPostsView = false,
-  // Live tab: null = not live tab; 0 = top/counting card; 1,2,3 = static display only
-  livePosition = null,
-  onExpireStart,  // called when countdown hits 0 (keeps card in list during animation)
-  onPostExpire,   // called after 3s winner hold (triggers FeedScreen collapse)
+  // Live tab
+  isLive = false,
+  onExpireStart,  // called at second 0 — keeps card in list while Supabase marks it closed
+  onExpire,       // called after 5s (3s hold + 2s fade) — FeedScreen removes from list
 }) {
   const navigate    = useNavigate()
   const { session } = useAuth()
@@ -91,12 +91,13 @@ export default function PostCard({
   const [voteError, setVoteError]         = useState(false)
   // Prevents double-tap before React re-renders with voted=true
   const votingRef = useRef(false)
-  // Live tab
-  const isLive    = livePosition !== null
-  const isTopLive = livePosition === 0
-  const [expiryPhase, setExpiryPhase]     = useState('none') // 'none' | 'revealing' | 'done'
-  const [countdownActive, setCountdownActive] = useState(false) // true only for top card after 400ms settle
-  const expiryFiredRef = useRef(false) // prevents sequence from firing twice
+  // Countdown — always running, drives TimerRing and expiry detection
+  const [secondsLeft, setSecondsLeft] = useState(
+    () => Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
+  )
+  // Live tab expiry phases
+  const [expiryPhase, setExpiryPhase] = useState('none') // 'none' | 'winner' | 'fading'
+  const expiryFiredRef = useRef(false)
 
   useEffect(() => () => timeoutsRef.current.forEach(clearTimeout), [])
 
@@ -105,47 +106,22 @@ export default function PostCard({
     setShareCount(initialPost.share_count || 0)
   }, [initialPost])
 
-  // Only the top card runs the countdown. When a card reaches position 0 (promoted or
-  // initial load) wait 400ms for the slide-up animation to settle before starting.
+  // Each card owns its countdown. Runs unconditionally so TimerRing always has fresh data.
   useEffect(() => {
-    if (!isTopLive) {
-      setCountdownActive(false)
-      return
-    }
-    const t = setTimeout(() => setCountdownActive(true), 400)
-    return () => clearTimeout(t)
-  }, [isTopLive])
-
-  // Countdown interval — only runs for the active top card
-  useEffect(() => {
-    if (!countdownActive) return
-    function tick() {
-      const s = Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
-      if (s === 0 && !expiryFiredRef.current) {
-        expiryFiredRef.current = true
-        onExpireStart?.(post.id)
-        runExpirySequence()
-      }
-    }
-    tick()
-    const id = setInterval(tick, 1000)
+    const compute = () => Math.max(0, Math.floor((new Date(post.expires_at) - Date.now()) / 1000))
+    const id = setInterval(() => setSecondsLeft(compute()), 1000)
     return () => clearInterval(id)
-  }, [countdownActive, post.expires_at])
+  }, [post.expires_at])
 
-  function runExpirySequence() {
-    setExpiryPhase('revealing')
-    addTimeout(() => {
-      setExpiryPhase('done')
-      onPostExpire?.(post.id)
-    }, 3000)
-  }
-
-  // Static M:SS display for non-top live cards (no interval — frozen at render time)
-  function staticTimeLeft(expiresAt) {
-    const s = Math.max(0, Math.floor((new Date(expiresAt) - Date.now()) / 1000))
-    const m = Math.floor(s / 60)
-    return `${m}:${String(s % 60).padStart(2, '0')}`
-  }
+  // Expiry sequence — fires once when this live card's countdown reaches zero
+  useEffect(() => {
+    if (!isLive || secondsLeft !== 0 || expiryFiredRef.current) return
+    expiryFiredRef.current = true
+    onExpireStart?.(post.id)
+    setExpiryPhase('winner')
+    addTimeout(() => setExpiryPhase('fading'), 3000)
+    addTimeout(() => onExpire?.(post.id), 5000)
+  }, [secondsLeft, isLive])
 
   const options  = post.options || []
   const isClosed = post.status === 'closed'
@@ -162,7 +138,7 @@ export default function PostCard({
   const totalVotes = options.reduce((s, o) => s + humanCount(o), 0)
   const winningId  = options.reduce((mx, o) => (!mx || humanCount(o) > humanCount(mx) ? o : mx), null)?.id
 
-  const clientExpired = expiryPhase !== 'none'
+  const clientExpired = expiryPhase === 'winner' || expiryPhase === 'fading'
   const showResults   = voted || isClosed || isMyPostsView || clientExpired
   const isOwner      = currentUserId && post.user_id === currentUserId
   const isRealtime   = post.mode === 'realtime'
@@ -267,7 +243,11 @@ export default function PostCard({
     <>
       <div
         className="bg-white border border-[#E5E5E5] rounded-card overflow-hidden relative"
-        style={{ borderWidth: '0.5px' }}
+        style={{
+          borderWidth: '0.5px',
+          opacity:    expiryPhase === 'fading' ? 0 : 1,
+          transition: expiryPhase === 'fading' ? 'opacity 2s ease' : undefined,
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2">
@@ -293,18 +273,11 @@ export default function PostCard({
               <span className="px-2 py-0.5 bg-[#534AB7]/10 text-[#534AB7] rounded-full text-[10px] font-semibold whitespace-nowrap">
                 Decision made
               </span>
-            ) : isLive && livePosition > 0 ? (
-              /* Non-top live cards: frozen static time, no animation */
-              <span className="text-xs font-medium tabular-nums" style={{ color: '#6B6B6B' }}>
-                {staticTimeLeft(post.expires_at)}
-              </span>
             ) : isRealtime && !isClosed ? (
               <TimerRing
-                key={post.expires_at}
-                expiresAt={post.expires_at}
+                secondsLeft={secondsLeft}
                 totalMinutes={15}
                 size="sm"
-                ready={countdownActive}
                 showThumbsUp={clientExpired}
               />
             ) : (
