@@ -1,262 +1,115 @@
 const { supabase } = require('./supabaseClient')
 
-const REALISTIC_USERNAMES = [
-  'sophie.styles', 'homewithmark', 'foodie_dan', 'designbyjess', 'beautywithlena',
-  'alex.chen', 'maya_patel', 'jordan_lee', 'rav.gupta', 'lily.j',
-  'noah_black', 'emma.s', 'ethan.w', 'ava_prince', 'liam.k',
-  'zoe_woods', 'marco.r', 'nina.g', 'oscar.t', 'ruby.m',
-]
+// LoremFlickr — category-specific photos, deterministic per lock value, no API key needed
+const LOREMFLICKR_KEYWORDS = {
+  fashion: 'fashion',
+  food:    'food',
+  home:    'interior',
+  design:  'design',
+  beauty:  'beauty',
+}
 
-// Extensive unique image URLs per category (30+ per category to never repeat)
-const CATEGORY_IMAGES = {
-  fashion: [
-    'https://picsum.photos/seed/fashion_01/400/400',
-    'https://picsum.photos/seed/fashion_02/400/400',
-    'https://picsum.photos/seed/fashion_03/400/400',
-    'https://picsum.photos/seed/fashion_04/400/400',
-    'https://picsum.photos/seed/fashion_05/400/400',
-    'https://picsum.photos/seed/fashion_06/400/400',
-    'https://picsum.photos/seed/fashion_07/400/400',
-    'https://picsum.photos/seed/fashion_08/400/400',
-    'https://picsum.photos/seed/fashion_09/400/400',
-    'https://picsum.photos/seed/fashion_10/400/400',
-    'https://picsum.photos/seed/fashion_11/400/400',
-    'https://picsum.photos/seed/fashion_12/400/400',
-    'https://picsum.photos/seed/fashion_13/400/400',
-    'https://picsum.photos/seed/fashion_14/400/400',
-    'https://picsum.photos/seed/fashion_15/400/400',
-    'https://picsum.photos/seed/fashion_16/400/400',
-    'https://picsum.photos/seed/fashion_17/400/400',
-    'https://picsum.photos/seed/fashion_18/400/400',
-    'https://picsum.photos/seed/fashion_19/400/400',
-    'https://picsum.photos/seed/fashion_20/400/400',
-    'https://picsum.photos/seed/fashion_21/400/400',
-    'https://picsum.photos/seed/fashion_22/400/400',
-    'https://picsum.photos/seed/fashion_23/400/400',
-    'https://picsum.photos/seed/fashion_24/400/400',
-    'https://picsum.photos/seed/fashion_25/400/400',
-    'https://picsum.photos/seed/fashion_26/400/400',
-    'https://picsum.photos/seed/fashion_27/400/400',
-    'https://picsum.photos/seed/fashion_28/400/400',
-    'https://picsum.photos/seed/fashion_29/400/400',
-    'https://picsum.photos/seed/fashion_30/400/400',
-  ],
-  food: [
-    'https://picsum.photos/seed/food_01/400/400',
-    'https://picsum.photos/seed/food_02/400/400',
-    'https://picsum.photos/seed/food_03/400/400',
-    'https://picsum.photos/seed/food_04/400/400',
-    'https://picsum.photos/seed/food_05/400/400',
-    'https://picsum.photos/seed/food_06/400/400',
-    'https://picsum.photos/seed/food_07/400/400',
-    'https://picsum.photos/seed/food_08/400/400',
-    'https://picsum.photos/seed/food_09/400/400',
-    'https://picsum.photos/seed/food_10/400/400',
-    'https://picsum.photos/seed/food_11/400/400',
-    'https://picsum.photos/seed/food_12/400/400',
-    'https://picsum.photos/seed/food_13/400/400',
-    'https://picsum.photos/seed/food_14/400/400',
-    'https://picsum.photos/seed/food_15/400/400',
-    'https://picsum.photos/seed/food_16/400/400',
-    'https://picsum.photos/seed/food_17/400/400',
-    'https://picsum.photos/seed/food_18/400/400',
-    'https://picsum.photos/seed/food_19/400/400',
-    'https://picsum.photos/seed/food_20/400/400',
-    'https://picsum.photos/seed/food_21/400/400',
-    'https://picsum.photos/seed/food_22/400/400',
-    'https://picsum.photos/seed/food_23/400/400',
-    'https://picsum.photos/seed/food_24/400/400',
-    'https://picsum.photos/seed/food_25/400/400',
-    'https://picsum.photos/seed/food_26/400/400',
-    'https://picsum.photos/seed/food_27/400/400',
-    'https://picsum.photos/seed/food_28/400/400',
-    'https://picsum.photos/seed/food_29/400/400',
-    'https://picsum.photos/seed/food_30/400/400',
-  ],
-  home: [
-    'https://picsum.photos/seed/home_01/400/400',
-    'https://picsum.photos/seed/home_02/400/400',
-    'https://picsum.photos/seed/home_03/400/400',
-    'https://picsum.photos/seed/home_04/400/400',
-    'https://picsum.photos/seed/home_05/400/400',
-    'https://picsum.photos/seed/home_06/400/400',
-    'https://picsum.photos/seed/home_07/400/400',
-    'https://picsum.photos/seed/home_08/400/400',
-    'https://picsum.photos/seed/home_09/400/400',
-    'https://picsum.photos/seed/home_10/400/400',
-    'https://picsum.photos/seed/home_11/400/400',
-    'https://picsum.photos/seed/home_12/400/400',
-    'https://picsum.photos/seed/home_13/400/400',
-    'https://picsum.photos/seed/home_14/400/400',
-    'https://picsum.photos/seed/home_15/400/400',
-    'https://picsum.photos/seed/home_16/400/400',
-    'https://picsum.photos/seed/home_17/400/400',
-    'https://picsum.photos/seed/home_18/400/400',
-    'https://picsum.photos/seed/home_19/400/400',
-    'https://picsum.photos/seed/home_20/400/400',
-    'https://picsum.photos/seed/home_21/400/400',
-    'https://picsum.photos/seed/home_22/400/400',
-    'https://picsum.photos/seed/home_23/400/400',
-    'https://picsum.photos/seed/home_24/400/400',
-    'https://picsum.photos/seed/home_25/400/400',
-    'https://picsum.photos/seed/home_26/400/400',
-    'https://picsum.photos/seed/home_27/400/400',
-    'https://picsum.photos/seed/home_28/400/400',
-    'https://picsum.photos/seed/home_29/400/400',
-    'https://picsum.photos/seed/home_30/400/400',
-  ],
-  design: [
-    'https://picsum.photos/seed/design_01/400/400',
-    'https://picsum.photos/seed/design_02/400/400',
-    'https://picsum.photos/seed/design_03/400/400',
-    'https://picsum.photos/seed/design_04/400/400',
-    'https://picsum.photos/seed/design_05/400/400',
-    'https://picsum.photos/seed/design_06/400/400',
-    'https://picsum.photos/seed/design_07/400/400',
-    'https://picsum.photos/seed/design_08/400/400',
-    'https://picsum.photos/seed/design_09/400/400',
-    'https://picsum.photos/seed/design_10/400/400',
-    'https://picsum.photos/seed/design_11/400/400',
-    'https://picsum.photos/seed/design_12/400/400',
-    'https://picsum.photos/seed/design_13/400/400',
-    'https://picsum.photos/seed/design_14/400/400',
-    'https://picsum.photos/seed/design_15/400/400',
-    'https://picsum.photos/seed/design_16/400/400',
-    'https://picsum.photos/seed/design_17/400/400',
-    'https://picsum.photos/seed/design_18/400/400',
-    'https://picsum.photos/seed/design_19/400/400',
-    'https://picsum.photos/seed/design_20/400/400',
-    'https://picsum.photos/seed/design_21/400/400',
-    'https://picsum.photos/seed/design_22/400/400',
-    'https://picsum.photos/seed/design_23/400/400',
-    'https://picsum.photos/seed/design_24/400/400',
-    'https://picsum.photos/seed/design_25/400/400',
-    'https://picsum.photos/seed/design_26/400/400',
-    'https://picsum.photos/seed/design_27/400/400',
-    'https://picsum.photos/seed/design_28/400/400',
-    'https://picsum.photos/seed/design_29/400/400',
-    'https://picsum.photos/seed/design_30/400/400',
-  ],
-  beauty: [
-    'https://picsum.photos/seed/beauty_01/400/400',
-    'https://picsum.photos/seed/beauty_02/400/400',
-    'https://picsum.photos/seed/beauty_03/400/400',
-    'https://picsum.photos/seed/beauty_04/400/400',
-    'https://picsum.photos/seed/beauty_05/400/400',
-    'https://picsum.photos/seed/beauty_06/400/400',
-    'https://picsum.photos/seed/beauty_07/400/400',
-    'https://picsum.photos/seed/beauty_08/400/400',
-    'https://picsum.photos/seed/beauty_09/400/400',
-    'https://picsum.photos/seed/beauty_10/400/400',
-    'https://picsum.photos/seed/beauty_11/400/400',
-    'https://picsum.photos/seed/beauty_12/400/400',
-    'https://picsum.photos/seed/beauty_13/400/400',
-    'https://picsum.photos/seed/beauty_14/400/400',
-    'https://picsum.photos/seed/beauty_15/400/400',
-    'https://picsum.photos/seed/beauty_16/400/400',
-    'https://picsum.photos/seed/beauty_17/400/400',
-    'https://picsum.photos/seed/beauty_18/400/400',
-    'https://picsum.photos/seed/beauty_19/400/400',
-    'https://picsum.photos/seed/beauty_20/400/400',
-    'https://picsum.photos/seed/beauty_21/400/400',
-    'https://picsum.photos/seed/beauty_22/400/400',
-    'https://picsum.photos/seed/beauty_23/400/400',
-    'https://picsum.photos/seed/beauty_24/400/400',
-    'https://picsum.photos/seed/beauty_25/400/400',
-    'https://picsum.photos/seed/beauty_26/400/400',
-    'https://picsum.photos/seed/beauty_27/400/400',
-    'https://picsum.photos/seed/beauty_28/400/400',
-    'https://picsum.photos/seed/beauty_29/400/400',
-    'https://picsum.photos/seed/beauty_30/400/400',
-  ],
+function categoryImages(category) {
+  const kw = LOREMFLICKR_KEYWORDS[category] || category
+  return Array.from({ length: 30 }, (_, i) =>
+    `https://loremflickr.com/400/400/${kw}?lock=${i + 1}`
+  )
 }
 
 const CATEGORY_QUESTIONS = {
   fashion: [
     'Which outfit for tonight?',
     'Casual or dressy for the party?',
-    'Which colour works better?',
-    'Boots or heels?',
-    'Summer dress vibes — which one?',
-    'Jacket or blazer?',
-    'Skirt or pants?',
-    'Prints or solid?',
-    'Light or dark tones?',
-    'Statement or minimal?',
-    'Vintage or modern?',
-    'Bold or neutral?',
-    'Layered or sleek?',
+    'Which colour works better on me?',
+    'Boots or heels for this look?',
+    'Summer dress — which one?',
+    'Jacket or blazer for the office?',
+    'Skirt or trousers?',
+    'Prints or solid colours?',
+    'Light or dark tones for autumn?',
+    'Statement piece or minimal accessories?',
+    'Vintage or modern aesthetic?',
+    'Bold or neutral palette?',
+    'Layered or sleek silhouette?',
     'Which shade of blue?',
-    'Tucked or untucked?',
+    'Tucked or untucked for the event?',
   ],
   food: [
     'Pasta or risotto tonight?',
     'Which restaurant should we try?',
-    'Spicy or mild?',
+    'Spicy or mild for date night?',
     'Sweet or savoury for dessert?',
-    'Coffee or tea?',
-    'Breakfast or brunch?',
-    'Sushi or ramen?',
-    'Pizza or burger?',
-    'Salad or soup?',
-    'Vegan or meat?',
-    'Italian or Asian?',
-    'Chocolate or vanilla?',
-    'Grilled or fried?',
-    'Light or hearty?',
-    'Street food or fine dining?',
+    'Coffee or tea this morning?',
+    'Breakfast or brunch spread — which?',
+    'Sushi or ramen tonight?',
+    'Pizza or burger for the game?',
+    'Salad or soup for lunch?',
+    'Vegan or meat option — which looks better?',
+    'Italian or Asian for the group?',
+    'Chocolate or vanilla cake?',
+    'Grilled or fried chicken?',
+    'Light starter or hearty main?',
+    'Street food or fine dining tonight?',
   ],
   home: [
-    'Which colour for the wall?',
-    'Modern or cosy for the living room?',
-    'Plant in the corner or corner empty?',
+    'Which colour for the living room wall?',
+    'Modern or cosy feel for the space?',
+    'Plant in the corner or leave it open?',
     'Wood or metal for the coffee table?',
-    'Sofa placement — which layout?',
-    'Rug or no rug?',
-    'Curtains or blinds?',
-    'Shelves or wall art?',
-    'Minimalist or maximal?',
-    'Warm or cool lighting?',
-    'Hardwood or carpet?',
-    'Paint or wallpaper?',
-    'Open plan or separate rooms?',
-    'Which furniture style?',
-    'Statement piece or subtle?',
+    'Sofa placement — which layout works?',
+    'Rug or no rug under the table?',
+    'Curtains or blinds for the bedroom?',
+    'Shelves or a gallery wall?',
+    'Minimalist or maximalist styling?',
+    'Warm or cool lighting for the kitchen?',
+    'Hardwood or carpet in the bedroom?',
+    'Paint or wallpaper for the feature wall?',
+    'Open plan or keep the separate rooms?',
+    'Which furniture style for the corner?',
+    'Statement piece or keep it subtle?',
   ],
   design: [
-    'Which logo design?',
-    'Minimalist or detailed for the layout?',
-    'Dark mode or light mode?',
-    'Typography — serif or sans-serif?',
-    'Which colour scheme?',
+    'Which logo direction?',
+    'Minimalist or detailed layout?',
+    'Dark mode or light mode for the app?',
+    'Serif or sans-serif for this brand?',
+    'Which colour scheme feels right?',
     'Modern or classic aesthetic?',
     'Geometric or organic shapes?',
-    'Bold or subtle branding?',
-    'Custom or template-based?',
-    'Gradient or flat colours?',
-    'Which font pairing?',
-    'Symmetrical or asymmetrical?',
-    'Playful or professional?',
-    'Icon style — line or filled?',
-    'Which layout grid?',
+    'Bold or subtle branding approach?',
+    'Custom illustration or photography?',
+    'Gradient or flat colour palette?',
+    'Which font pairing works better?',
+    'Symmetrical or asymmetrical layout?',
+    'Playful or professional tone?',
+    'Line icons or filled icons?',
+    'Which grid layout for the homepage?',
   ],
   beauty: [
-    'Makeup look — natural or bold?',
-    'Which nail colour?',
-    'Curly or straight hair style?',
-    'Red or nude lipstick?',
+    'Natural or bold makeup for tonight?',
+    'Which nail colour for the wedding?',
+    'Curly or straight — which suits me?',
+    'Red or nude lip for the occasion?',
     'Summer glow or matte finish?',
     'Smokey eye or cat eye?',
-    'Highlighter — dewy or satin?',
-    'Blush shade — warm or cool?',
-    'Hair up or down?',
-    'Bold lashes or natural?',
-    'Foundation finish — matte or dewy?',
-    'Eyebrow shape — arch or soft?',
-    'Bronzer or contour?',
-    'Lip gloss or tint?',
-    'Which hair colour?',
+    'Dewy or satin highlighter?',
+    'Warm or cool blush shade?',
+    'Hair up or down for the event?',
+    'Bold lashes or natural look?',
+    'Matte or dewy foundation finish?',
+    'Arched or soft eyebrow shape?',
+    'Bronzer or contour for my face shape?',
+    'Lip gloss or tinted lip balm?',
+    'Which hair colour direction?',
   ],
+}
+
+// Plan mix for seed posts — makes the feed realistic
+// plus/pro users show AI strip automatically; free users may or may not have paid
+const SEED_PLAN_WEIGHTS = ['free', 'free', 'plus', 'plus', 'pro']
+
+function pickRandomPlan() {
+  return SEED_PLAN_WEIGHTS[Math.floor(Math.random() * SEED_PLAN_WEIGHTS.length)]
 }
 
 function getRandomElement(arr) {
@@ -267,17 +120,13 @@ function getRandomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-function getRandomUsername() {
-  return getRandomElement(REALISTIC_USERNAMES)
-}
-
 function getRandomVoteCount() {
   return getRandomInt(15, 180)
 }
 
-async function createSeedPost(userId, category, mode) {
+async function createSeedPost(user, category, mode) {
   const isRealtime = mode === 'realtime'
-  const expiresAt = new Date()
+  const expiresAt  = new Date()
 
   if (isRealtime) {
     expiresAt.setMinutes(expiresAt.getMinutes() + getRandomInt(8, 14))
@@ -285,20 +134,27 @@ async function createSeedPost(userId, category, mode) {
     expiresAt.setHours(expiresAt.getHours() + getRandomInt(10, 12))
   }
 
-  const images = CATEGORY_IMAGES[category]
-  const questions = CATEGORY_QUESTIONS[category]
+  const userPlan = user.plan || 'free'
+  const isPlus   = userPlan === 'plus' || userPlan === 'pro'
+  // Free users: 55% chance they paid for AI verdict on this post
+  const freePaid = !isPlus && Math.random() < 0.55
 
-  const question = getRandomElement(questions)
-  const selectedImages = images.sort(() => Math.random() - 0.5).slice(0, 2)
+  const images    = categoryImages(category)
+  const questions = CATEGORY_QUESTIONS[category]
+  const question  = getRandomElement(questions)
+
+  // Pick 2 distinct images
+  const shuffled = [...images].sort(() => Math.random() - 0.5)
+  const selectedImages = shuffled.slice(0, 2)
 
   const postData = {
-    user_id: userId,
+    user_id:    user.id,
     mode,
     category,
     question,
-    status: 'active',
+    status:     'active',
     expires_at: expiresAt.toISOString(),
-    ai_verdict_paid: true,  // seed posts always show the AI strip as demo content
+    ai_verdict_paid: freePaid,
   }
 
   let { data: post, error: postErr } = await supabase
@@ -307,7 +163,6 @@ async function createSeedPost(userId, category, mode) {
     .select()
     .single()
 
-  // If column doesn't exist yet (migration pending), retry without it
   if (postErr?.message?.includes('ai_verdict_paid')) {
     const { ai_verdict_paid: _ignored, ...fallbackData } = postData
     ;({ data: post, error: postErr } = await supabase
@@ -315,7 +170,7 @@ async function createSeedPost(userId, category, mode) {
   }
 
   if (postErr || !post) {
-    console.error('Failed to create seed post:', postErr)
+    console.error('[Seed] Failed to create post:', postErr?.message)
     return null
   }
 
@@ -328,59 +183,63 @@ async function createSeedPost(userId, category, mode) {
     .from('options').insert(optionData).select()
 
   if (optErr || !createdOptions) {
-    console.error('Failed to create options:', optErr)
+    console.error('[Seed] Failed to create options:', optErr?.message)
     return null
   }
 
-  // Always add an AI verdict for seed posts so the strip renders in feed
-  const winningIdx = createdOptions[0].vote_count > createdOptions[1].vote_count ? 0 : 1
-  const winnerLabel = createdOptions[winningIdx].label
-  const verdictReasons = {
-    fashion: 'Stronger visual appeal and better colour balance for the occasion.',
-    food:    'More visually appetising presentation and better plating.',
-    home:    'Better proportions and visual harmony with the space.',
-    design:  'Cleaner composition with stronger brand recall.',
-    beauty:  'More flattering tones that complement natural features.',
-    other:   'Stronger visual impact and broader audience appeal.',
+  // Only create AI verdict when the post is entitled to show the strip:
+  // — plus/pro creator (plan covers it), or free creator who paid the £0.99 boost
+  if (isPlus || freePaid) {
+    const winningIdx  = createdOptions[0].vote_count > createdOptions[1].vote_count ? 0 : 1
+    const verdictReasons = {
+      fashion: 'Stronger visual appeal and better colour balance for the occasion.',
+      food:    'More visually appetising presentation and better plating.',
+      home:    'Better proportions and visual harmony with the space.',
+      design:  'Cleaner composition with stronger brand recall.',
+      beauty:  'More flattering tones that complement natural features.',
+    }
+    await supabase.from('ai_verdicts').insert({
+      post_id: post.id,
+      recommendation_option_id: createdOptions[winningIdx].id,
+      confidence: parseFloat((0.7 + Math.random() * 0.25).toFixed(2)),
+      insights: [
+        { text: verdictReasons[category] || 'Best choice based on visual analysis.' },
+        { text: 'Community preference aligns with this option.' },
+        { text: 'Higher engagement predicted in this category.' },
+      ],
+      sources: [
+        { name: 'Trend analysis' },
+        { name: 'Community insights' },
+      ],
+    })
   }
-  await supabase.from('ai_verdicts').insert({
-    post_id: post.id,
-    recommendation_option_id: createdOptions[winningIdx].id,
-    confidence: 0.76,
-    insights: [
-      { text: verdictReasons[category] || 'Best choice based on visual analysis.' },
-      { text: 'Community preference aligns with this option.' },
-      { text: 'Higher engagement predicted in this category.' },
-    ],
-    sources: [
-      { name: 'Trend analysis' },
-      { name: 'Community insights' },
-    ],
-  })
 
   return post
 }
 
-// Module-level counter so rotation persists across job runs within the same process
 let seedUserRotationIdx = 0
 
 async function ensureSeedStructure() {
-  const { data: seedUsers } = await supabase.from('users').select('id').limit(4)
+  // Fetch seed users with their plan so we can decide AI verdict entitlement per post
+  const { data: seedUsers } = await supabase
+    .from('users')
+    .select('id, username, plan')
+    .limit(10)
+
   if (!seedUsers?.length) {
-    console.log('[Seed] No users found — skipping seed structure')
+    console.log('[Seed] No users found — skipping')
     return
   }
 
-  function nextUserId() {
-    const uid = seedUsers[seedUserRotationIdx % seedUsers.length].id
+  function nextUser() {
+    const u = seedUsers[seedUserRotationIdx % seedUsers.length]
     seedUserRotationIdx++
-    return uid
+    return u
   }
 
   const categories = ['fashion', 'food', 'home', 'design', 'beauty']
 
   for (const category of categories) {
-    // Check 12-hour posts
     const { count: count12h } = await supabase
       .from('posts')
       .select('*', { count: 'exact', head: true })
@@ -390,13 +249,12 @@ async function ensureSeedStructure() {
 
     if ((count12h || 0) < 3) {
       const needed = 3 - (count12h || 0)
-      console.log(`[Seed] ${category}: need ${needed} 12-hour posts`)
+      console.log(`[Seed] ${category}: creating ${needed} twelve_hour posts`)
       for (let i = 0; i < needed; i++) {
-        await createSeedPost(nextUserId(), category, 'twelve_hour')
+        await createSeedPost(nextUser(), category, 'twelve_hour')
       }
     }
 
-    // Check realtime posts
     const { count: countRT } = await supabase
       .from('posts')
       .select('*', { count: 'exact', head: true })
@@ -406,9 +264,9 @@ async function ensureSeedStructure() {
 
     if ((countRT || 0) < 3) {
       const needed = 3 - (countRT || 0)
-      console.log(`[Seed] ${category}: need ${needed} realtime posts`)
+      console.log(`[Seed] ${category}: creating ${needed} realtime posts`)
       for (let i = 0; i < needed; i++) {
-        await createSeedPost(nextUserId(), category, 'realtime')
+        await createSeedPost(nextUser(), category, 'realtime')
       }
     }
   }
@@ -418,7 +276,7 @@ async function ensureSeedStructure() {
     .select('*', { count: 'exact', head: true })
     .eq('status', 'active')
 
-  console.log(`[Seed] Total active seed posts: ${totalActive || 0}/30`)
+  console.log(`[Seed] Active posts: ${totalActive || 0}`)
 }
 
 module.exports = { ensureSeedStructure }

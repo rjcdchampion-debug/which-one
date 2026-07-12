@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Zap, Bell } from 'lucide-react'
+import { Zap, Bell, Lock } from 'lucide-react'
 import PostCard from '../components/PostCard'
 import PaymentModal from '../components/PaymentModal'
 import TimerRing from '../components/TimerRing'
@@ -14,8 +14,8 @@ import { usePlan } from '../hooks/usePlan'
 const TABS = [
   { id: 'foryou',  label: 'For You'  },
   { id: 'live',    label: 'Live', live: true },
-  { id: 'myvotes', label: 'My Votes' },
-  { id: 'mine',    label: 'My Posts' },
+  { id: 'myvotes', label: 'My Votes', authRequired: true },
+  { id: 'mine',    label: 'My Posts', authRequired: true },
 ]
 
 const CAT_FILTERS = [
@@ -58,6 +58,18 @@ export default function FeedScreen() {
   const [myVotes, setMyVotes] = useState([])
   const [myVotesStats, setMyVotesStats] = useState({ total: 0, majorityAgreePercent: 0 })
   const [loading, setLoading] = useState(true)
+
+  // Live strip inline sheet
+  const [selectedLivePost, setSelectedLivePost] = useState(null)
+  const [liveSheetFading, setLiveSheetFading] = useState(false)
+
+  function handleLiveSheetVoteComplete() {
+    setLiveSheetFading(true)
+    setTimeout(() => {
+      setSelectedLivePost(null)
+      setLiveSheetFading(false)
+    }, 800)
+  }
 
   // For You disappearing mechanic
   const [animatingPostIds, setAnimatingPostIds] = useState(new Set())
@@ -135,6 +147,31 @@ export default function FeedScreen() {
     stripTimersRef.current = []
     setFadingStripIds(new Set())
     setCollapsingStripIds(new Set())
+  }, [tab])
+
+  // For You expiry checker: fade + collapse cards when they close
+  useEffect(() => {
+    if (tab !== 'foryou') return
+    const id = setInterval(() => {
+      const now = Date.now()
+      postsRef.current.forEach(p => {
+        if (
+          p.status === 'active' &&
+          new Date(p.expires_at) <= now &&
+          !processedPostIdsRef.current.has(p.id)
+        ) {
+          processedPostIdsRef.current.add(p.id)
+          setPosts(prev => prev.map(q => q.id === p.id ? { ...q, status: 'closed' } : q))
+          setCollapsingPostIds(prev => new Set([...prev, p.id]))
+          const tid = setTimeout(() => {
+            setCollapsingPostIds(prev => { const s = new Set(prev); s.delete(p.id); return s })
+            delete collapseTimersRef.current[p.id]
+          }, 2700)
+          collapseTimersRef.current[p.id] = tid
+        }
+      })
+    }, 1000)
+    return () => clearInterval(id)
   }, [tab])
 
   // Client-side expiry checker: triggers animation when a live post's timer hits 0
@@ -293,13 +330,14 @@ export default function FeedScreen() {
       .filter(p => {
         if (tab === 'live') return (p.mode === 'realtime' && p.status === 'active') || expiringPostIds.has(p.id)
         if (tab === 'mine') return true
-        // For You: exclude live-strip posts; exclude voted posts unless mid-animation
+        // For You: exclude live-strip posts; exclude voted/closed posts unless mid-animation
         if (realtimePosts.includes(p)) return false
-        if (user && hasVoted(p.id) && !animatingPostIds.has(p.id) && !collapsingPostIds.has(p.id)) return false
+        if (p.status === 'closed' && !collapsingPostIds.has(p.id) && !animatingPostIds.has(p.id)) return false
+        if (hasVoted(p.id) && !animatingPostIds.has(p.id) && !collapsingPostIds.has(p.id)) return false
         return true
       })
       .sort((a, b) => {
-        if (tab === 'live') return new Date(a.expires_at) - new Date(b.expires_at)
+        if (tab === 'live' || tab === 'foryou') return new Date(a.expires_at) - new Date(b.expires_at)
         return new Date(b.created_at) - new Date(a.created_at)
       })
   )
@@ -341,25 +379,36 @@ export default function FeedScreen() {
         <div className="flex justify-center">
           <div className="w-full max-w-app">
             <div className="flex">
-              {TABS.map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={`flex-1 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
-                    tab === t.id ? 'border-[#534AB7] text-[#534AB7]' : 'border-transparent text-[#6B6B6B]'
-                  }`}
-                >
-                  {t.live ? (
-                    <span className="inline-flex items-center justify-center gap-1.5">
-                      {t.label}
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+              {TABS.map(t => {
+                const locked = t.authRequired && !user
+                return (
+                  <button
+                    key={t.id}
+                    onClick={() => {
+                      if (locked) { navigate('/register'); return }
+                      setTab(t.id)
+                    }}
+                    className={`flex-1 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
+                      tab === t.id ? 'border-[#534AB7] text-[#534AB7]' : 'border-transparent text-[#6B6B6B]'
+                    } ${locked ? 'opacity-40' : ''}`}
+                  >
+                    {t.live ? (
+                      <span className="inline-flex items-center justify-center gap-1.5">
+                        {t.label}
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                        </span>
                       </span>
-                    </span>
-                  ) : t.label}
-                </button>
-              ))}
+                    ) : locked ? (
+                      <span className="inline-flex items-center justify-center gap-1">
+                        {t.label}
+                        <Lock size={10} className="inline" />
+                      </span>
+                    ) : t.label}
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>
@@ -481,7 +530,7 @@ export default function FeedScreen() {
                         >
                           <LiveCard
                             post={post}
-                            onOpen={() => navigate(`/post/${post.id}`)}
+                            onOpen={() => setSelectedLivePost(post)}
                             onExpire={handleStripExpire}
                           />
                         </div>
@@ -525,7 +574,7 @@ export default function FeedScreen() {
                         <PostCard
                           post={post}
                           currentUserId={user?.id}
-                          isForYou={tab === 'foryou' && !!user}
+                          isForYou={tab === 'foryou'}
                           onVoteStart={handleVoteStart}
                           onVoteAnimationComplete={handleVoteAnimationComplete}
                           expiryPhase={isExpiring && post.id === animatingPostId ? expiryPhase : 'none'}
@@ -549,6 +598,26 @@ export default function FeedScreen() {
         onClose={() => setAiPayPostId(null)}
         onPurchase={() => handleAiPurchase(aiPayPostId)}
       />
+    )}
+
+    {/* Live strip inline vote sheet */}
+    {selectedLivePost && (
+      <div
+        className="fixed inset-0 z-50 flex flex-col justify-end"
+        style={{ opacity: liveSheetFading ? 0 : 1, transition: liveSheetFading ? 'opacity 0.8s ease' : undefined }}
+      >
+        <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedLivePost(null)} />
+        <div className="relative bg-[#F5F5F5] rounded-t-2xl px-4 pt-4 pb-8" onClick={e => e.stopPropagation()}>
+          <div className="w-10 h-1 bg-[#D0D0D0] rounded-full mx-auto mb-4" />
+          <PostCard
+            post={selectedLivePost}
+            currentUserId={user?.id}
+            isForYou={true}
+            onVoteStart={() => {}}
+            onVoteAnimationComplete={handleLiveSheetVoteComplete}
+          />
+        </div>
+      </div>
     )}
 
     {/* Boost upgrade prompt (after 3 one-off purchases) */}

@@ -101,6 +101,19 @@ this-or-that/
 - AI strip only shows on the card when: creator is Plus/Pro **or** `post.ai_verdict_paid = true`.
 - After 50 human votes the AI vote is automatically removed.
 
+### For You feed mechanics
+- Posts sorted by `expires_at` ascending (most urgent first).
+- After voting: results animate in → 4s hold → "Vote logged — thanks from [username]" overlay fades in → card fades out and collapses (posts below slide up).
+- Works for both authenticated and guest users — `isForYou={tab === 'foryou'}` (no `&&user` guard).
+- When a post closes (timer expires): detected by 1-second client-side interval → card fades out and collapses via `collapsingPostIds` (same animation as voted posts).
+- `processedPostIdsRef` guards against processing the same expiry twice.
+
+### Live strip
+- Tapping a live strip card opens an inline bottom sheet (no navigation) with the full PostCard.
+- User votes in the sheet → same "Vote logged" animation as For You → sheet fades out and closes (800ms fade).
+- Tapping the dark overlay dismisses the sheet without voting.
+- Underlying feed remains mounted and visible behind the overlay.
+
 ### Feed tabs
 | Tab | API call | Notes |
 |---|---|---|
@@ -174,16 +187,14 @@ Vite proxy (`vite.config.js`) forwards `/api/*` to `http://localhost:4000` when 
 
 ---
 
-## Known issues (as of June 2026)
+## Known issues (as of July 2026)
 
 | Issue | Priority |
 |---|---|
-| Live strip — expired cards not fading out and sliding left consistently | High |
 | iOS Safari display bug — content above viewport | Medium |
 | Option A photo blank on some posts (browser-only) | Medium |
 | Plan not persisting correctly after simulated upgrade | Medium |
 | AI verdict strip not displaying despite DB records existing | Medium |
-| 12-hour posts buried below real-time posts in Live tab | Low |
 
 ---
 

@@ -1,10 +1,13 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginScreen() {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
+  const location  = useLocation()
   const { signIn } = useAuth()
+
+  const fromCreate = location.state?.from === '/create'
 
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -34,7 +37,16 @@ export default function LoginScreen() {
         </div>
 
         <div className="bg-white rounded-card border border-[#E5E5E5] p-6" style={{ borderWidth: '0.5px' }}>
-          <h2 className="text-xl font-bold text-[#1A1A1A] mb-6">Sign in</h2>
+          {fromCreate ? (
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-[#1A1A1A]">Create a free account to post</h2>
+              <p className="text-sm text-[#6B6B6B] mt-2">
+                You can vote without signing in — but to share your own This or That, you'll need an account.
+              </p>
+            </div>
+          ) : (
+            <h2 className="text-xl font-bold text-[#1A1A1A] mb-6">Sign in</h2>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -82,7 +94,7 @@ export default function LoginScreen() {
           <p className="text-center text-sm text-[#6B6B6B] mt-5">
             No account?{' '}
             <Link to="/register" className="text-[#534AB7] font-semibold">
-              Create one
+              Create a free account
             </Link>
           </p>
         </div>

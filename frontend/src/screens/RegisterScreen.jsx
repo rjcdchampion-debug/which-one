@@ -45,7 +45,7 @@ export default function RegisterScreen() {
         </div>
 
         <div className="bg-white rounded-card border border-[#E5E5E5] p-6" style={{ borderWidth: '0.5px' }}>
-          <h2 className="text-xl font-bold text-[#1A1A1A] mb-6">Create account</h2>
+          <h2 className="text-xl font-bold text-[#1A1A1A] mb-6">Create free account</h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -103,7 +103,7 @@ export default function RegisterScreen() {
             >
               {loading ? (
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : 'Create account'}
+              ) : 'Create free account'}
             </button>
           </form>
 

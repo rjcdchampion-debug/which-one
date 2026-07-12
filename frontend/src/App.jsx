@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
 import BottomNav from './components/BottomNav'
 import FeedScreen          from './screens/FeedScreen'
@@ -7,20 +7,18 @@ import CreatePostScreen    from './screens/CreatePostScreen'
 import ProfileScreen       from './screens/ProfileScreen'
 import LoginScreen         from './screens/LoginScreen'
 import RegisterScreen      from './screens/RegisterScreen'
-import SetupUsernameScreen from './screens/SetupUsernameScreen'
 import PricingScreen       from './screens/PricingScreen'
 
 function ProtectedRoute({ children }) {
-  const { user, profileMissing, loading } = useAuth()
+  const { user, loading } = useAuth()
+  const location = useLocation()
   if (loading) return null
-  if (!user) return <Navigate to="/login" replace />
-  if (profileMissing) return <Navigate to="/setup-username" replace />
+  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   return children
 }
 
 export default function App() {
-  const { user, profile, profileMissing, loading } = useAuth()
-
+  const { loading } = useAuth()
 
   if (loading) {
     return (
@@ -33,24 +31,12 @@ export default function App() {
     )
   }
 
-  // Logged in but genuinely no profile row — ask them to pick a username
-  if (user && profileMissing) {
-    return (
-      <div className="h-full bg-[#F5F5F5]">
-        <Routes>
-          <Route path="/setup-username" element={<SetupUsernameScreen />} />
-          <Route path="*" element={<Navigate to="/setup-username" replace />} />
-        </Routes>
-      </div>
-    )
-  }
-
   return (
     <div className="h-full bg-[#F5F5F5]">
       <Routes>
         <Route path="/login"    element={<LoginScreen />} />
         <Route path="/register" element={<RegisterScreen />} />
-        <Route path="/setup-username" element={<Navigate to="/" replace />} />
+        <Route path="/setup-username" element={<Navigate to="/register" replace />} />
 
         {/* Public routes with bottom nav */}
         <Route path="/" element={<>

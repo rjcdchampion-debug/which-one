@@ -135,8 +135,8 @@ export default function PostCard({
     onVoteStart?.(postId)
     addTimeout(() => {
       setShowVoteMessage(true)
-      // Next frame: trigger the opacity CSS transition for fade-in
-      addTimeout(() => setMsgOpacity(1), 30)
+      // Two rAF frames guarantee the element is painted before the transition starts
+      requestAnimationFrame(() => requestAnimationFrame(() => setMsgOpacity(1)))
       // After 1s fade-in, signal FeedScreen to begin collapse (2s opacity + 0.4s height with 2s delay)
       addTimeout(() => onVoteAnimationComplete?.(postId), 1000)
     }, 4000)
@@ -277,6 +277,7 @@ export default function PostCard({
                     disabled={voted || isClosed || isMyPostsView || clientExpired}
                     className="relative rounded-lg overflow-hidden focus:outline-none active:opacity-80 transition-opacity"
                     style={{
+                      touchAction: 'manipulation',
                       boxShadow: showResults && isWinner
                         ? `0 0 0 2.5px ${clientExpired ? '#854F0B' : accentColor}`
                         : undefined,

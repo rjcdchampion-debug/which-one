@@ -1,9 +1,11 @@
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Home, User, PlusCircle } from 'lucide-react'
+import { Home, User, PlusCircle, UserPlus } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function BottomNav() {
   const navigate     = useNavigate()
   const { pathname } = useLocation()
+  const { user }     = useAuth()
 
   function NavBtn({ path, Icon, label }) {
     const active = pathname === path
@@ -29,7 +31,7 @@ export default function BottomNav() {
           paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
         }}
       >
-        <NavBtn path="/"        Icon={Home} label="Feed" />
+        <NavBtn path="/" Icon={Home} label="Feed" />
 
         {/* Centre FAB */}
         <button
@@ -43,7 +45,17 @@ export default function BottomNav() {
           <span className="mt-0.5">Post</span>
         </button>
 
-        <NavBtn path="/profile" Icon={User} label="Profile" />
+        {user ? (
+          <NavBtn path="/profile" Icon={User} label="Profile" />
+        ) : (
+          <button
+            onClick={() => navigate('/register')}
+            className="flex flex-col items-center gap-0.5 py-3 px-8 text-[11px] font-medium text-[#534AB7]"
+          >
+            <UserPlus size={22} strokeWidth={1.8} />
+            Sign up
+          </button>
+        )}
       </div>
     </nav>
   )

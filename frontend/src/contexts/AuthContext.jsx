@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
@@ -9,6 +9,9 @@ export function AuthProvider({ children }) {
   const [profileMissing, setProfileMissing] = useState(false)
   const [loading, setLoading]     = useState(true)
   const [session, setSession]     = useState(null)
+  // Prevents onAuthStateChange from running fetchProfile mid-signup,
+  // which would see no profile yet and flash the SetupUsername screen
+  const isSigningUpRef = useRef(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -21,8 +24,12 @@ export function AuthProvider({ children }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
       setUser(session?.user ?? null)
-      if (session?.user) fetchProfile(session.user.id)
-      else { setProfile(null); setLoading(false) }
+      if (session?.user) {
+        if (!isSigningUpRef.current) fetchProfile(session.user.id)
+      } else {
+        setProfile(null)
+        setLoading(false)
+      }
     })
 
     return () => subscription.unsubscribe()
@@ -64,34 +71,40 @@ export function AuthProvider({ children }) {
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    localStorage.removeItem('this_or_that_plan_override')
     return data
   }
 
   async function signUp(email, password, username) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: undefined },
-    })
-    if (error) throw error
-    if (!data.session) {
-      throw new Error('Check your email to confirm your account, then sign in.')
+    isSigningUpRef.current = true
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: undefined },
+      })
+      if (error) throw error
+      if (!data.session) {
+        throw new Error('Check your email to confirm your account, then sign in.')
+      }
+      const now = new Date().toISOString()
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({ id: data.user.id, username, plan: 'free', last_seen: now })
+      if (profileError) throw new Error(profileError.message)
+      setProfile({ id: data.user.id, username, plan: 'free', last_seen: now })
+      setProfileMissing(false)
+      setLoading(false)
+      return data
+    } finally {
+      isSigningUpRef.current = false
     }
-    const now = new Date().toISOString()
-    const { error: profileError } = await supabase
-      .from('users')
-      .insert({ id: data.user.id, username, plan: 'free', last_seen: now })
-    if (profileError) throw new Error(profileError.message)
-    // Set state directly — prevents any race with onAuthStateChange-triggered fetchProfile
-    setProfile({ id: data.user.id, username, plan: 'free', last_seen: now })
-    setProfileMissing(false)
-    setLoading(false)
-    return data
   }
 
   async function signOut() {
     await supabase.auth.signOut()
     setProfile(null)
+    localStorage.removeItem('this_or_that_plan_override')
   }
 
   return (

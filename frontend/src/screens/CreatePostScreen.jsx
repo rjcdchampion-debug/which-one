@@ -554,7 +554,7 @@ function Step3({ category, question, onQuestionChange, photos, inputRefs, onFile
         </div>
       )}
 
-      {/* Primary: Post now */}
+      {/* Primary: Post for free */}
       <button
         onClick={onSubmit}
         disabled={!canPost}
@@ -563,23 +563,22 @@ function Step3({ category, question, onQuestionChange, photos, inputRefs, onFile
       >
         {submitting ? (
           <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Posting…</>
-        ) : 'Post · Start now'}
+        ) : 'Post for free · Start now'}
       </button>
 
-      {/* Secondary: AI verdict */}
+      {/* Secondary: Post with AI verdict */}
       <button
         onClick={onSubmitWithAI}
         disabled={!canPost}
-        className="w-full py-4 rounded-btn font-semibold flex items-center justify-center gap-2 border-2 transition-colors"
+        className="w-full py-4 rounded-btn font-semibold flex items-center justify-center gap-2 transition-colors"
         style={{
-          borderColor: canPost ? '#D4A017' : '#E5E5E5',
-          color: canPost ? '#D4A017' : '#6B6B6B',
-          background: 'white',
+          background: canPost ? '#B8860B' : '#E5E5E5',
+          color: canPost ? 'white' : '#6B6B6B',
           opacity: canPost ? 1 : 0.5,
         }}
       >
-        <Sparkles size={16} style={{ color: canPost ? '#D4A017' : '#6B6B6B' }} />
-        {isPlus ? '✨ Post with AI verdict' : '✨ Get AI verdict · £0.99'}
+        <Sparkles size={16} style={{ color: canPost ? 'white' : '#6B6B6B' }} />
+        {isPlus ? 'Post with AI verdict' : 'Include AI verdict · +£0.99'}
       </button>
     </div>
   )

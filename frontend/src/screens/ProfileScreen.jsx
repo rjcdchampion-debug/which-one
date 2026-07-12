@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LogOut, Pencil, Check, X, Sparkles } from 'lucide-react'
+import { LogOut, Pencil, Check, X, Sparkles, ChevronLeft } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { usePlan } from '../hooks/usePlan'
 import { api } from '../lib/api'
@@ -83,6 +83,10 @@ export default function ProfileScreen() {
       <header className="sticky top-0 z-20 bg-white border-b border-[#E5E5E5]" style={{ borderBottomWidth: '0.5px' }}>
         <div className="flex justify-center">
           <div className="w-full max-w-app px-4 h-14 flex items-center justify-between">
+            <button onClick={() => navigate('/')} className="flex items-center gap-1 text-[#534AB7] p-1 -ml-1">
+              <ChevronLeft size={22} />
+              <span className="text-sm font-semibold">Feed</span>
+            </button>
             <h2 className="font-semibold text-[#1A1A1A]">Profile</h2>
             <button onClick={handleSignOut} className="p-1.5 text-[#6B6B6B]">
               <LogOut size={18} />
@@ -206,12 +210,12 @@ export default function ProfileScreen() {
 
 function PostGrid({ posts, closed = false, onOpen }) {
   return (
-    <div className="grid grid-cols-2 gap-2">
+    <div className="space-y-2">
       {posts.map(post => {
-        const options = post.options || []
-        const cover   = options[0]?.photo_url
+        const options    = post.options || []
+        const cover      = options[0]?.photo_url
         const totalVotes = options.reduce((s, o) => s + (o.vote_count || 0), 0)
-        const winner = closed
+        const winner     = closed
           ? options.reduce((mx, o) => (!mx || o.vote_count > mx.vote_count ? o : mx), null)
           : null
 
@@ -219,26 +223,30 @@ function PostGrid({ posts, closed = false, onOpen }) {
           <button
             key={post.id}
             onClick={() => onOpen(post.id)}
-            className="relative rounded-card overflow-hidden bg-white text-left"
+            className="w-full bg-white rounded-card border border-[#E5E5E5] flex items-center gap-3 px-3 py-3 text-left"
+            style={{ borderWidth: '0.5px' }}
           >
             {cover ? (
-              <img src={cover} alt="" className="w-full aspect-square object-cover" />
+              <img src={cover} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
             ) : (
-              <div className="w-full aspect-square bg-[#F5F5F5] flex items-center justify-center">
-                <span className="text-2xl">📷</span>
+              <div className="w-12 h-12 rounded-lg bg-[#F5F5F5] flex items-center justify-center shrink-0">
+                <span className="text-lg">📷</span>
               </div>
             )}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-2">
-              <p className="text-white text-[11px] font-medium leading-snug line-clamp-2">
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-[#1A1A1A] leading-snug line-clamp-2">
                 {post.question}
               </p>
-              <p className="text-white/70 text-[10px] mt-0.5">{totalVotes} votes</p>
-            </div>
-            {closed && winner && (
-              <div className="absolute top-2 left-2 bg-[#0F6E56] px-1.5 py-0.5 rounded-full text-white text-[10px] font-semibold">
-                Winner: {winner.label}
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs text-[#6B6B6B]">{totalVotes} votes</span>
+                {closed && winner && (
+                  <span className="px-1.5 py-0.5 bg-[#0F6E56]/10 text-[#0F6E56] text-[10px] font-semibold rounded-full">
+                    Winner: {winner.label}
+                  </span>
+                )}
               </div>
-            )}
+            </div>
+            <span className="text-[#C5C5C5] text-lg shrink-0">›</span>
           </button>
         )
       })}
