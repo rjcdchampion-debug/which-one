@@ -34,28 +34,36 @@ this-or-that/
 │       ├── components/
 │       │   ├── PostCard.jsx      # Core voting card + all state
 │       │   ├── TimerRing.jsx     # Countdown SVG ring
-│       │   ├── BottomNav.jsx     # Tab bar (Home/Create/Profile)
-│       │   └── PaymentModal.jsx  # Mock £0.99 payment sheet
+│       │   ├── BottomNav.jsx     # Tab bar (Home/Create/Profile) — mobile only, hidden ≥768px
+│       │   ├── LiveCard.jsx      # Single cycling-photo live card — mobile strip only
+│       │   ├── PaymentModal.jsx  # Mock £0.99 payment sheet (bottom sheet on mobile, centered dialog ≥768px)
+│       │   └── desktop/                  # Desktop-only chrome, rendered when useIsDesktop() is true
+│       │       ├── DesktopTopNav.jsx     # Replaces BottomNav ≥768px — logo left, tabs + Post/bell/avatar right
+│       │       ├── CategorySidebar.jsx   # Left column on For You/Live/My Posts: categories, live stats, votes-by-category, demographics (Plus, "coming soon"), upgrade nudge
+│       │       ├── MyVotesSidebar.jsx    # Left column on My Votes: personal stats, votes by category, "most in sync with the crowd" ranking — all computed client-side from myVotes, nothing fabricated
+│       │       └── DesktopLiveStrip.jsx  # Hero banner (rotating paired photos) + horizontally scrolling strip of DecisionPairCard (paired photos + "or" divider, unlike mobile's single-photo LiveCard)
 │       ├── screens/
-│       │   ├── FeedScreen.jsx         # Feed with 4 tabs + live strip
-│       │   ├── CreatePostScreen.jsx   # 3-step post creation
-│       │   ├── PostDetailScreen.jsx   # Full post + AI deep-dive
-│       │   ├── ProfileScreen.jsx      # User profile + post grid
-│       │   ├── PricingScreen.jsx      # Plan tiers + mock upgrade
+│       │   ├── FeedScreen.jsx         # Feed with 4 tabs + live strip; branches on useIsDesktop() for chrome/layout only — data/vote/expiry logic is shared between mobile and desktop, not duplicated
+│       │   ├── CreatePostScreen.jsx   # 3-step post creation (mobile layout only — desktop not yet built, see Desktop layout notes)
+│       │   ├── PostDetailScreen.jsx   # Full post + AI deep-dive (mobile layout only)
+│       │   ├── ProfileScreen.jsx      # User profile + post grid (mobile layout only)
+│       │   ├── PricingScreen.jsx      # Plan tiers + mock upgrade (mobile layout only)
 │       │   ├── LoginScreen.jsx
 │       │   ├── RegisterScreen.jsx
 │       │   └── SetupUsernameScreen.jsx
 │       ├── contexts/
 │       │   └── AuthContext.jsx   # Supabase auth + profile fetch
 │       ├── hooks/
-│       │   ├── usePlan.js    # Plan tier from DB + localStorage override
-│       │   ├── useVoter.js   # Guest voter ID + vote localStorage cache
+│       │   ├── usePlan.js       # Plan tier from DB + localStorage override
+│       │   ├── useVoter.js      # Guest voter ID + vote localStorage cache
+│       │   ├── useIsDesktop.js  # matchMedia('(min-width: 768px)') hook — the one source of truth for the desktop breakpoint
 │       │   └── usePurchases.js
 │       └── lib/
-│           ├── api.js        # All backend API calls
-│           ├── supabase.js   # Supabase client + image upload
-│           ├── utils.js      # uuid()
-│           └── mockData.js   # Fallback seed posts for offline dev
+│           ├── api.js          # All backend API calls
+│           ├── supabase.js     # Supabase client + image upload
+│           ├── utils.js        # uuid()
+│           ├── feedConfig.js   # TABS and CAT_FILTERS — shared by FeedScreen, DesktopTopNav, CategorySidebar
+│           └── mockData.js     # Fallback seed posts for offline dev
 ├── backend/
 │   └── src/
 │       ├── index.js              # Express server, CORS, background jobs
@@ -69,7 +77,9 @@ this-or-that/
 │           ├── users.js    # Profile create/get + plan upgrade
 │           └── seed.js     # Seed trigger endpoint
 ├── Docs/
-│   └── this-or-that-requirements-v2.md   # Full PRD
+│   ├── this-or-that-requirements-v2.md   # Full PRD
+│   ├── desktop-layout-build-spec.md      # Desktop layout implementation spec
+│   └── ai-seed-content-pilot.md          # Scoped pilot: AI-generated seed photos, food category first
 └── netlify.toml
 ```
 
@@ -114,6 +124,19 @@ this-or-that/
 - Tapping the dark overlay dismisses the sheet without voting.
 - Underlying feed remains mounted and visible behind the overlay.
 
+### Desktop layout (≥768px)
+- Single breakpoint, `useIsDesktop()` (matchMedia on `768px`), used wherever mobile and desktop need genuinely different component trees (nav chrome, modal shape). Pure spacing/sizing differences use Tailwind `md:` classes instead.
+- Below 768px nothing changed — same markup, same classes, same behavior as before this work. `BottomNav` still owns mobile nav; `DesktopTopNav` takes over at 768px and up.
+- `FeedScreen.jsx` branches on `useIsDesktop()` for layout only. All data fetching, vote/expiry state machines, and realtime subscriptions are shared — desktop and mobile read from the same `posts`/`mainPosts`/`realtimePosts` values, just render them differently. Don't fork the data logic if you touch this again.
+- Desktop's live strip has no post cap (`realtimePostsSorted` unsliced); mobile keeps the original top-3 cap (`.slice(0, 3)`) — deliberate, don't unify these. Strip has left/right scroll-arrow buttons (`DesktopLiveStrip`) that show/hide based on scroll position, in addition to native drag/wheel scrolling.
+- Hero banner (`DesktopLiveStrip`'s `HeroBanner`): both option photos shown with an "or" divider pill and A/B badges, 7.5s dwell time per decision before it rotates.
+- Sidebar content is real, not placeholder: `categoryVotes` (CategorySidebar) and the My Votes stats (MyVotesSidebar) are computed client-side from actual vote counts / vote history already in state. The demographics widget is intentionally still "Coming soon" — there's no age/location field anywhere in the schema, and adding one is a deliberate future decision (privacy/consent implications), not a quick add.
+- The hero "Featured" slot is gated exactly like AI verdict: `posts.featured_paid` (migration `005_featured_paid.sql`, set via `POST /api/posts/:id/feature`), free for Plus/Pro, £0.99 one-off otherwise. Purchasable two ways: from "My Posts" on an already-published realtime post, or at creation time in `CreatePostScreen` Step 3 ("Include Featured placement · +£0.99", realtime posts only — button is hidden for 12-hour posts since they're never eligible for the hero slot). `DesktopLiveStrip` filters the live pool for `featured_paid` posts first; if none exist yet, it falls back to auto-picking from the live pool so the section is never empty — those auto-picked posts render the plain coral "Deciding right now" badge instead of the purple "Featured decision" one, so it's never ambiguous which posts actually paid.
+- **`005_featured_paid.sql` still needs to be run against the live Supabase project** (dashboard SQL editor or CLI) — it was never applied through this tooling, only saved to the repo. Until it runs, `featured_paid` doesn't exist as a column and the purchase buttons will fail on click (everything else degrades gracefully to the auto-pick fallback).
+- My Posts has a status filter above the post list (`MineStatusFilter` in `FeedScreen.jsx`) — All / Live / Completed pills with real counts from the loaded posts, same visual pattern as the category pills. Resets to "All" on tab change like `catFilter` does.
+- Scope is the feed surface only: top nav, live strip, category sidebar, My Votes sidebar, main feed, and the modals it opens (`PaymentModal`, live-strip vote sheet, boost prompt). `CreatePostScreen`'s Featured button is the one exception that reaches outside the feed surface. `PostDetailScreen`, `ProfileScreen`, `PricingScreen`, and the auth screens still render their mobile `max-w-app` column at every width — not yet extended to desktop.
+- See `Docs/desktop-layout-build-spec.md` for the original build spec and rationale.
+
 ### Feed tabs
 | Tab | API call | Notes |
 |---|---|---|
@@ -130,14 +153,14 @@ this-or-that/
 ### Seed system
 - `seed-posts.js` maintains ≥30 active posts: 3 realtime + 3 twelve_hour per category (5 categories = 30 total).
 - Runs every 5 minutes via `setInterval` in `index.js`.
-- Photos pulled from Unsplash (`source.unsplash.com/...`) by category keyword.
+- Photos pulled from LoremFlickr (`loremflickr.com/400/400/{keyword}?lock=n`) by category keyword, deterministic per lock value. (This briefly got swapped to Picsum during the desktop-layout work — Picsum is more reliable but not category-relevant, so it was reverted. See `Docs/ai-seed-content-pilot.md` for the actual planned fix: AI-generated, category-coherent seed photos, piloted on the food category first.)
 
 ---
 
 ## Data model (Supabase)
 
 ### posts
-`id, user_id, mode (realtime|twelve_hour), category, question, status (active|closed), expires_at, share_count, ai_verdict_paid, created_at`
+`id, user_id, mode (realtime|twelve_hour), category, question, status (active|closed), expires_at, share_count, ai_verdict_paid, featured_paid, created_at`
 
 ### options
 `id, post_id, label, photo_url, vote_count, display_order`
@@ -216,6 +239,7 @@ All purchases are simulated — no real Stripe/Apple Pay. The UI flow is complet
 | Realtime post (30 min, 1 hr) | ❌ | ✅ | ✅ | ✅ |
 | 12-hour post | ❌ | ✅ | ✅ | ✅ |
 | AI verdict | ❌ | ✅ | ✅ | ✅ |
+| Featured placement (desktop hero) | ❌ | ✅ | ✅ | ✅ |
 | Demographic breakdown | ❌ | ✅ | ✅ | — |
 | Unlimited boosts | ❌ | ❌ | ✅ | — |
 | Analytics dashboard | ❌ | ❌ | ✅ | — |

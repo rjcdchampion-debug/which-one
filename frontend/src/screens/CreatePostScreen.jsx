@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, Upload, X, Clock, Zap, Sparkles } from 'lucide-react'
+import { ChevronLeft, Upload, X, Clock, Zap, Sparkles, Star } from 'lucide-react'
 import PaymentModal from '../components/PaymentModal'
 import { useAuth } from '../contexts/AuthContext'
 import { usePlan } from '../hooks/usePlan'
@@ -139,6 +139,7 @@ export default function CreatePostScreen() {
   const [pendingDuration, setPendingDuration] = useState(null)
   const [showAiModal, setShowAiModal]   = useState(false)
   const [wantAI, setWantAI]             = useState(false)
+  const [showFeatureModal, setShowFeatureModal] = useState(false)
 
   const inputRefs = [useRef(), useRef(), useRef(), useRef()]
 
@@ -185,7 +186,7 @@ export default function CreatePostScreen() {
 
   const filledCount = photos.filter(Boolean).length
 
-  async function handleSubmit(withAI = false) {
+  async function handleSubmit(withAI = false, withFeature = false) {
     if (filledCount < 2 || submitting) return
     if (!user) { navigate('/login'); return }
 
@@ -227,6 +228,12 @@ export default function CreatePostScreen() {
       // Trigger real AI verdict if paid or Plus user
       if (withAI || isPlus) {
         api.requestAiVerdict(postId, session?.access_token).catch(() => {})
+      }
+
+      // Featured placement only applies to realtime posts (that's the only pool
+      // the desktop hero draws from) — mirrors the My Posts upsell gating.
+      if (mode === 'realtime' && (withFeature || isPlus)) {
+        api.requestFeature(postId, session?.access_token).catch(() => {})
       }
 
       navigate('/')
@@ -274,6 +281,7 @@ export default function CreatePostScreen() {
             )}
             {step === 3 && (
               <Step3
+                mode={mode}
                 category={category}
                 question={question}
                 onQuestionChange={setQuestion}
@@ -286,6 +294,10 @@ export default function CreatePostScreen() {
                 error={error}
                 isPlus={isPlus}
                 onSubmit={() => handleSubmit(false)}
+                onSubmitWithFeature={() => {
+                  if (isPlus) { handleSubmit(false, true); return }
+                  setShowFeatureModal(true)
+                }}
                 onSubmitWithAI={() => {
                   if (isPlus) { handleSubmit(true); return }
                   setShowAiModal(true)
@@ -316,6 +328,20 @@ export default function CreatePostScreen() {
             setShowAiModal(false)
             recordBoost()
             handleSubmit(true)
+          }}
+        />
+      )}
+
+      {/* Featured-placement payment modal (Step 3) */}
+      {showFeatureModal && (
+        <PaymentModal
+          featureLabel="Featured placement on the desktop feed"
+          price="£0.99"
+          onClose={() => setShowFeatureModal(false)}
+          onPurchase={() => {
+            setShowFeatureModal(false)
+            recordBoost()
+            handleSubmit(false, true)
           }}
         />
       )}
@@ -486,7 +512,7 @@ function Step2({ category, onSelect, onContinue }) {
   )
 }
 
-function Step3({ category, question, onQuestionChange, photos, inputRefs, onFileChange, onRemove, filledCount, submitting, error, isPlus, onSubmit, onSubmitWithAI }) {
+function Step3({ mode, category, question, onQuestionChange, photos, inputRefs, onFileChange, onRemove, filledCount, submitting, error, isPlus, onSubmit, onSubmitWithFeature, onSubmitWithAI }) {
   const multiRef = useRef()
 
   const SLOTS = [
@@ -565,6 +591,24 @@ function Step3({ category, question, onQuestionChange, photos, inputRefs, onFile
           <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Posting…</>
         ) : 'Post for free · Start now'}
       </button>
+
+      {/* Secondary: Post with Featured placement — realtime posts only, that's the only pool the desktop hero draws from */}
+      {mode === 'realtime' && (
+        <button
+          onClick={onSubmitWithFeature}
+          disabled={!canPost}
+          className="w-full py-4 rounded-btn font-semibold flex items-center justify-center gap-2 transition-colors border-2"
+          style={{
+            borderColor: canPost ? '#534AB7' : '#E5E5E5',
+            color:       canPost ? '#534AB7' : '#6B6B6B',
+            background:  'white',
+            opacity:     canPost ? 1 : 0.5,
+          }}
+        >
+          <Star size={16} />
+          {isPlus ? 'Post with Featured placement' : 'Include Featured placement · +£0.99'}
+        </button>
+      )}
 
       {/* Secondary: Post with AI verdict */}
       <button

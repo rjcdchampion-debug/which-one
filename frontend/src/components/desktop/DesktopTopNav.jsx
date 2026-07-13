@@ -78,4 +78,21 @@ export default function DesktopTopNav({ tab, setTab }) {
                 {(profile?.username || '?')[0].toUpperCase()}
               </button>
             ) : (
-              <div classNam
+              <div className="flex items-center gap-2">
+                <button onClick={() => navigate('/login')} className="text-sm font-medium text-[#6B6B6B] hover:text-[#1A1A1A]">
+                  Log in
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="px-3.5 py-2 border border-[#534AB7] text-[#534AB7] rounded-btn text-sm font-semibold"
+                >
+                  Sign up
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </header>
+  )
+}

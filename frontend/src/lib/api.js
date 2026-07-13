@@ -58,6 +58,12 @@ export const api = {
       headers: authHeaders(token),
     }),
 
+  requestFeature: (postId, token) =>
+    request(`/api/posts/${postId}/feature`, {
+      method: 'POST',
+      headers: authHeaders(token),
+    }),
+
   getUserProfile: (id) =>
     request(`/api/users/${id}`),
 

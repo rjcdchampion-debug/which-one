@@ -294,4 +294,24 @@ router.post('/:id/ai-verdict', authMiddleware, async (req, res) => {
   }
 })
 
+// ── POST /api/posts/:id/feature ──────────────────────────────────────────────
+// Marks a post as eligible for the desktop "Featured" hero slot (one-off £0.99
+// for free users; Plus/Pro users get this included, checked on the frontend via
+// post.users.plan same as the AI verdict gate).
+
+router.post('/:id/feature', authMiddleware, async (req, res) => {
+  try {
+    const postId = req.params.id
+
+    const { data: post } = await supabase.from('posts').select('id').eq('id', postId).single()
+    if (!post) return res.status(404).json({ error: 'Post not found' })
+
+    await supabase.from('posts').update({ featured_paid: true }).eq('id', postId)
+
+    res.json({ success: true })
+  } catch (err) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
 module.exports = router

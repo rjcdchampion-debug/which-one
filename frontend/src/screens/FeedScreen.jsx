@@ -817,4 +817,136 @@ function MyVotesContent({ myVotes, myVotesStats, user, navigate }) {
         <p className="text-sm text-[#6B6B6B] mb-6">Your full voting history lives here.</p>
         <button
           onClick={() => navigate('/login')}
-          className="px-6 py-3 bg-[#534AB7] text-white rounde
+          className="px-6 py-3 bg-[#534AB7] text-white rounded-btn text-sm font-semibold"
+        >
+          Sign in
+        </button>
+      </div>
+    )
+  }
+
+  if (myVotes.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+        <p className="text-4xl mb-4">🗳️</p>
+        <p className="font-semibold text-[#1A1A1A] mb-1">No votes yet</p>
+        <p className="text-sm text-[#6B6B6B] mb-6">Start voting on polls to build your history.</p>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      <div className="px-4 pt-4 pb-2">
+        <p className="text-sm text-[#6B6B6B]">
+          <span className="font-semibold text-[#1A1A1A]">{myVotesStats.total}</span> polls decided
+          {' · '}You agree with the majority{' '}
+          <span className="font-semibold" style={{ color: '#534AB7' }}>{myVotesStats.majorityAgreePercent}%</span>
+          {' '}of the time
+        </p>
+      </div>
+      <section className="px-4 pt-2 space-y-3">
+        {myVotes.map(vote => (
+          <PostCard
+            key={`${vote.id}_vote`}
+            post={vote}
+            currentUserId={user?.id}
+            initialVotedOptionId={vote.voted_option_id}
+          />
+        ))}
+      </section>
+    </>
+  )
+}
+
+function MineStatusFilter({ value, onChange, counts }) {
+  const OPTIONS = [
+    { id: 'all',    label: 'All' },
+    { id: 'active', label: 'Live' },
+    { id: 'closed', label: 'Completed' },
+  ]
+  return (
+    <div className="flex gap-2">
+      {OPTIONS.map(o => (
+        <button
+          key={o.id}
+          onClick={() => onChange(o.id)}
+          className="shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors"
+          style={{
+            background: value === o.id ? '#534AB7' : '#F0F0F0',
+            color:      value === o.id ? '#FFFFFF' : '#6B6B6B',
+          }}
+        >
+          {o.label} · {counts[o.id]}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function FeedSkeleton() {
+  return (
+    <div className="px-4 pt-4 space-y-3">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="bg-white rounded-card p-4 animate-pulse">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-full bg-[#E5E5E5]" />
+            <div className="h-3 w-24 bg-[#E5E5E5] rounded" />
+          </div>
+          <div className="h-4 w-3/4 bg-[#E5E5E5] rounded mb-3" />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="aspect-square bg-[#E5E5E5] rounded-lg" />
+            <div className="aspect-square bg-[#E5E5E5] rounded-lg" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function EmptyState({ tab, onPost, filtered = false }) {
+  if (tab === 'mine' && filtered) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+        <p className="text-4xl mb-4">🔀</p>
+        <p className="font-semibold text-[#1A1A1A] mb-1">No posts match this filter</p>
+        <p className="text-sm text-[#6B6B6B]">Try a different status above.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+      <p className="text-4xl mb-4">🔀</p>
+      <p className="font-semibold text-[#1A1A1A] mb-1">
+        {tab === 'mine' ? 'No posts yet' : 'Nothing here yet'}
+      </p>
+      <p className="text-sm text-[#6B6B6B] mb-6">
+        {tab === 'mine'
+          ? 'Create your first post and get instant votes.'
+          : 'Be the first to post something.'}
+      </p>
+      <button
+        onClick={onPost}
+        className="px-6 py-3 bg-[#534AB7] text-white rounded-btn text-sm font-semibold"
+      >
+        Create a post
+      </button>
+    </div>
+  )
+}
+
+function AllCaughtUpState({ onBrowseLive }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-20 text-center px-8">
+      <p className="text-4xl mb-4">✅</p>
+      <p className="font-semibold text-[#1A1A1A] mb-1">You're all caught up!</p>
+      <p className="text-sm text-[#6B6B6B] mb-6">Check back soon for new polls.</p>
+      <button
+        onClick={onBrowseLive}
+        className="px-6 py-3 bg-[#534AB7] text-white rounded-btn text-sm font-semibold"
+      >
+        Browse Live
+      </button>
+    </div>
+  )
+}

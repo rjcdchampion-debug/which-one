@@ -271,4 +271,12 @@ async function ensureSeedStructure() {
     }
   }
 
-  const { count: totalActive } = await 
+  const { count: totalActive } = await supabase
+    .from('posts')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'active')
+
+  console.log(`[Seed] Active posts: ${totalActive || 0}`)
+}
+
+module.exports = { ensureSeedStructure }

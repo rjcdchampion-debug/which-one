@@ -22,4 +22,8 @@ export default function PaymentModal({ featureLabel, price, onClose, onPurchase 
         >
           Pay {price} — unlock now
         </button>
-        <p className="text-center text-xs text-[#6B6B6B] mt-3">This is a demo —
+        <p className="text-center text-xs text-[#6B6B6B] mt-3">This is a demo — no real payment is taken.</p>
+      </div>
+    </div>
+  )
+}

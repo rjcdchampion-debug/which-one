@@ -60,4 +60,10 @@ export default function App() {
           <ProfileScreen />
           <BottomNav />
         </>} />
-        <Route path="/pricing" element={<PricingScree
+        <Route path="/pricing" element={<PricingScreen />} />
+
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
+  )
+}
