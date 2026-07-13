@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronLeft, Upload, X, Clock, Zap, Sparkles, Star } from 'lucide-react'
+import { ChevronLeft, Upload, X, Clock, Zap, Sparkles, Star, Camera } from 'lucide-react'
 import PaymentModal from '../components/PaymentModal'
 import { useAuth } from '../contexts/AuthContext'
 import { usePlan } from '../hooks/usePlan'
@@ -142,6 +142,7 @@ export default function CreatePostScreen() {
   const [showFeatureModal, setShowFeatureModal] = useState(false)
 
   const inputRefs = [useRef(), useRef(), useRef(), useRef()]
+  const cameraInputRefs = [useRef(), useRef(), useRef(), useRef()]
 
   function handleModeSelect(selected) {
     if (selected === 'twelve_hour' && !isPlus) {
@@ -287,6 +288,7 @@ export default function CreatePostScreen() {
                 onQuestionChange={setQuestion}
                 photos={photos}
                 inputRefs={inputRefs}
+                cameraInputRefs={cameraInputRefs}
                 onFileChange={handleFileChange}
                 onRemove={removePhoto}
                 filledCount={filledCount}
@@ -512,7 +514,7 @@ function Step2({ category, onSelect, onContinue }) {
   )
 }
 
-function Step3({ mode, category, question, onQuestionChange, photos, inputRefs, onFileChange, onRemove, filledCount, submitting, error, isPlus, onSubmit, onSubmitWithFeature, onSubmitWithAI }) {
+function Step3({ mode, category, question, onQuestionChange, photos, inputRefs, cameraInputRefs, onFileChange, onRemove, filledCount, submitting, error, isPlus, onSubmit, onSubmitWithFeature, onSubmitWithAI }) {
   const multiRef = useRef()
 
   const SLOTS = [
@@ -553,6 +555,7 @@ function Step3({ mode, category, question, onQuestionChange, photos, inputRefs, 
             label={label}
             required={required}
             inputRef={inputRefs[index]}
+            cameraInputRef={cameraInputRefs[index]}
             onChange={(file) => onFileChange(index, file)}
             onRemove={() => onRemove(index)}
           />
@@ -628,7 +631,7 @@ function Step3({ mode, category, question, onQuestionChange, photos, inputRefs, 
   )
 }
 
-function PhotoSlot({ photo, label, required, inputRef, onChange, onRemove }) {
+function PhotoSlot({ photo, label, required, inputRef, cameraInputRef, onChange, onRemove }) {
   return (
     <div className="relative aspect-square rounded-card overflow-hidden">
       {photo ? (
@@ -639,19 +642,40 @@ function PhotoSlot({ photo, label, required, inputRef, onChange, onRemove }) {
           </button>
         </>
       ) : (
-        <button
-          onClick={() => inputRef.current?.click()}
-          className="w-full h-full bg-white border border-dashed border-[#E5E5E5] flex flex-col items-center justify-center gap-2 transition-colors hover:border-[#534AB7]"
-        >
-          <Upload size={20} className="text-[#6B6B6B]" />
-          <p className="text-xs font-medium text-[#6B6B6B]">{label}</p>
-          {required && <p className="text-[10px] text-[#993C1D]">Required</p>}
-        </button>
+        <>
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="w-full h-full bg-white border border-dashed border-[#E5E5E5] flex flex-col items-center justify-center gap-2 transition-colors hover:border-[#534AB7]"
+          >
+            <Upload size={20} className="text-[#6B6B6B]" />
+            <p className="text-xs font-medium text-[#6B6B6B]">{label}</p>
+            {required && <p className="text-[10px] text-[#993C1D]">Required</p>}
+          </button>
+          {/* Mobile-only fast path: jumps straight to the camera via the input's
+              capture attribute, skipping the OS picker sheet. Desktop file inputs
+              can't open a camera at all, so this is hidden there — the plain
+              upload button already covers desktop. */}
+          <button
+            onClick={() => cameraInputRef.current?.click()}
+            className="md:hidden absolute top-2 right-2 z-10 w-7 h-7 bg-white border border-[#E5E5E5] rounded-full flex items-center justify-center shadow-sm"
+            aria-label="Take photo"
+          >
+            <Camera size={14} className="text-[#534AB7]" />
+          </button>
+        </>
       )}
       <input
         ref={inputRef}
         type="file"
         accept="image/jpeg,image/png,image/heic,image/heif,image/webp"
+        className="hidden"
+        onChange={e => onChange(e.target.files?.[0])}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         className="hidden"
         onChange={e => onChange(e.target.files?.[0])}
       />
