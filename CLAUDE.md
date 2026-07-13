@@ -196,6 +196,22 @@ PORT=4000
 
 ---
 
+## Deployments
+
+| Environment | Branch | Frontend | Backend | Database |
+|---|---|---|---|---|
+| Production | `main` | Netlify (live URL above) | Railway | Supabase (live project) |
+| Staging | `develop` | Netlify branch deploy — `develop--singular-donut-6bb8c8.netlify.app` | Railway `staging` environment | **Same Supabase project as production** (deliberate — no separate staging DB) |
+
+- Push to `develop` (not `main`) to test changes before they go live — Netlify branch deploys and the Railway `staging` environment both auto-deploy on push, same as production does for `main`.
+- Staging intentionally shares the production Supabase database. There is no data isolation between the two — a seed post or test vote created on staging is real data in the same tables production reads from. This was a deliberate simplicity-over-isolation tradeoff, not an oversight; revisit if staging ever needs to run destructive/schema-changing tests.
+- Staging env vars mirror production (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` / `VITE_SUPABASE_ANON_KEY`, `ANTHROPIC_API_KEY`) except:
+  - Railway `staging` → `FRONTEND_URL` points at the Netlify `develop` branch URL (CORS)
+  - Netlify `develop` branch context → `VITE_API_BASE_URL` points at the Railway `staging` backend URL
+- No branch protection on `main` — merges/pushes go straight through, staging is a manual "test before you push to main" step, not an enforced gate.
+
+---
+
 ## Running locally
 
 ```bash
