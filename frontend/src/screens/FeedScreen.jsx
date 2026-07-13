@@ -4,28 +4,19 @@ import { Zap, Bell, Lock } from 'lucide-react'
 import PostCard from '../components/PostCard'
 import PaymentModal from '../components/PaymentModal'
 import TimerRing from '../components/TimerRing'
+import LiveCard from '../components/LiveCard'
+import DesktopTopNav from '../components/desktop/DesktopTopNav'
+import CategorySidebar from '../components/desktop/CategorySidebar'
+import MyVotesSidebar from '../components/desktop/MyVotesSidebar'
+import DesktopLiveStrip from '../components/desktop/DesktopLiveStrip'
 import { api } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { MOCK_POSTS } from '../lib/mockData'
 import { useAuth } from '../contexts/AuthContext'
 import { useVoter } from '../hooks/useVoter'
 import { usePlan } from '../hooks/usePlan'
-
-const TABS = [
-  { id: 'foryou',  label: 'For You'  },
-  { id: 'live',    label: 'Live', live: true },
-  { id: 'myvotes', label: 'My Votes', authRequired: true },
-  { id: 'mine',    label: 'My Posts', authRequired: true },
-]
-
-const CAT_FILTERS = [
-  { id: 'all',     label: 'All'     },
-  { id: 'fashion', label: 'Fashion' },
-  { id: 'food',    label: 'Food'    },
-  { id: 'home',    label: 'Home'    },
-  { id: 'design',  label: 'Design'  },
-  { id: 'beauty',  label: 'Beauty'  },
-]
+import { useIsDesktop } from '../hooks/useIsDesktop'
+import { TABS, CAT_FILTERS } from '../lib/feedConfig'
 
 const SUPABASE_CONFIGURED = !!(
   import.meta.env.VITE_SUPABASE_URL &&
@@ -37,6 +28,7 @@ export default function FeedScreen() {
   const { user, profile, session } = useAuth()
   const { hasVoted } = useVoter()
   const { isPlus, recordBoost, showBoostPrompt, dismissBoostPrompt } = usePlan()
+  const isDesktop = useIsDesktop()
 
   // My Posts AI payment
   const [aiPayPostId, setAiPayPostId] = useState(null)
@@ -52,8 +44,23 @@ export default function FeedScreen() {
     } catch {}
   }
 
+  // My Posts Featured-placement payment
+  const [featurePayPostId, setFeaturePayPostId] = useState(null)
+
+  async function handleFeaturePurchase(postId) {
+    setFeaturePayPostId(null)
+    recordBoost()
+    try {
+      await api.requestFeature(postId, session?.access_token)
+      // Refresh my posts
+      const data = await api.getFeed('mine', session?.access_token)
+      setPosts(data.posts || [])
+    } catch {}
+  }
+
   const [tab, setTab]         = useState('foryou')
   const [catFilter, setCatFilter] = useState('all')
+  const [mineStatusFilter, setMineStatusFilter] = useState('all') // 'all' | 'active' | 'closed' — My Posts only
   const [posts, setPosts]     = useState([])
   const [myVotes, setMyVotes] = useState([])
   const [myVotesStats, setMyVotesStats] = useState({ total: 0, majorityAgreePercent: 0 })
@@ -128,6 +135,7 @@ export default function FeedScreen() {
   // Reset filters and animation state when changing tabs
   useEffect(() => {
     setCatFilter('all')
+    setMineStatusFilter('all')
     setAnimatingPostIds(new Set())
     setCollapsingPostIds(new Set())
     Object.values(collapseTimersRef.current).forEach(clearTimeout)
@@ -312,9 +320,11 @@ export default function FeedScreen() {
   const filterByCat = (arr) =>
     catFilter === 'all' ? arr : arr.filter(p => expiringPostIds.has(p.id) || p.category === catFilter)
 
-  // Live strip: top 3 urgency-sorted realtime posts.
+  // Live strip: urgency-sorted realtime posts. Mobile keeps the original top-3 cap
+  // (small screen, deliberately curated); desktop's strip scrolls horizontally so
+  // it can show every active realtime decision.
   // On For You tab, exclude posts the logged-in user already voted on.
-  const realtimePosts = filterByCat(
+  const realtimePostsSorted = filterByCat(
     posts
       .filter(p => {
         if (!(p.mode === 'realtime' && p.status === 'active')) return false
@@ -322,14 +332,15 @@ export default function FeedScreen() {
         return true
       })
       .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
-  ).slice(0, 3)
+  )
+  const realtimePosts = isDesktop ? realtimePostsSorted : realtimePostsSorted.slice(0, 3)
 
   // Main post list
   const mainPosts = tab === 'myvotes' ? [] : filterByCat(
     posts
       .filter(p => {
         if (tab === 'live') return (p.mode === 'realtime' && p.status === 'active') || expiringPostIds.has(p.id)
-        if (tab === 'mine') return true
+        if (tab === 'mine') return mineStatusFilter === 'all' ? true : p.status === mineStatusFilter
         // For You: exclude live-strip posts; exclude voted/closed posts unless mid-animation
         if (realtimePosts.includes(p)) return false
         if (p.status === 'closed' && !collapsingPostIds.has(p.id) && !animatingPostIds.has(p.id)) return false
@@ -342,16 +353,155 @@ export default function FeedScreen() {
       })
   )
 
+  // My Posts status counts — real counts from the currently loaded 'mine' posts
+  const mineCounts = tab === 'mine'
+    ? {
+        all:    posts.length,
+        active: posts.filter(p => p.status === 'active').length,
+        closed: posts.filter(p => p.status === 'closed').length,
+      }
+    : { all: 0, active: 0, closed: 0 }
+
+  // Real (not fabricated) category activity — summed from vote_counts on
+  // currently loaded active posts. Used by the desktop sidebar.
+  const categoryVotes = isDesktop
+    ? CAT_FILTERS.filter(c => c.id !== 'all').map(c => ({
+        id: c.id,
+        label: c.label,
+        votes: posts
+          .filter(p => p.category === c.id)
+          .reduce((s, p) => s + (p.options || []).reduce((ss, o) => ss + (o.vote_count || 0), 0), 0),
+      }))
+    : []
+
   // For You "all caught up" detection
   const allForYouVoted = tab === 'foryou' && user && posts.length > 0 &&
     posts
       .filter(p => !realtimePosts.includes(p))
       .every(p => hasVoted(p.id) && !animatingPostIds.has(p.id) && !collapsingPostIds.has(p.id))
 
+  // Shared per-post renderers — used by both the mobile stack and the desktop grid
+  // so the vote/expiry animation wiring only lives in one place.
+  function renderMainPostCard(post) {
+    const isForYouCollapsing = collapsingPostIds.has(post.id)
+    const isLiveCollapsing   = expiryCollapsingIds.has(post.id)
+    const isExpiring         = expiringPostIds.has(post.id)
+
+    let wrapperStyle
+    if (isForYouCollapsing) {
+      wrapperStyle = {
+        maxHeight: 0, opacity: 0, overflow: 'hidden', marginBottom: -12,
+        transition: 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s',
+      }
+    } else if (isLiveCollapsing) {
+      wrapperStyle = {
+        maxHeight: 0, overflow: 'hidden', marginBottom: -12,
+        transition: 'max-height 0.4s ease-in, margin-bottom 0.4s ease',
+      }
+    } else {
+      wrapperStyle = { overflow: 'hidden', maxHeight: 2000 }
+    }
+
+    return (
+      <div key={post.id} style={wrapperStyle}>
+        <PostCard
+          post={post}
+          currentUserId={user?.id}
+          isForYou={tab === 'foryou'}
+          onVoteStart={handleVoteStart}
+          onVoteAnimationComplete={handleVoteAnimationComplete}
+          expiryPhase={isExpiring && post.id === animatingPostId ? expiryPhase : 'none'}
+        />
+      </div>
+    )
+  }
+
+  function renderMinePostCard(post) {
+    const hasVerdict = post.ai_verdicts?.length > 0
+    return (
+      <div key={post.id} className="space-y-1">
+        <PostCard post={post} currentUserId={user?.id} isMyPostsView />
+        {!hasVerdict && (
+          <div
+            className="bg-white border border-[#E5E5E5] rounded-card px-4 py-3 flex items-center gap-3"
+            style={{ borderWidth: '0.5px' }}
+          >
+            <span className="text-xs text-[#6B6B6B] flex-1">
+              <span style={{ color: '#534AB7' }}>✨</span> Want AI insight on this decision?
+            </span>
+            <div className="flex gap-2 shrink-0">
+              {isPlus ? (
+                <button
+                  onClick={() => api.requestAiVerdict(post.id, session?.access_token).then(() => loadFeed())}
+                  className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
+                >
+                  Get AI verdict
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setAiPayPostId(post.id)}
+                    className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
+                  >
+                    Pay £0.99
+                  </button>
+                  <button
+                    onClick={() => navigate('/pricing')}
+                    className="px-3 py-1.5 border border-[#534AB7] text-[#534AB7] text-xs font-semibold rounded-lg"
+                  >
+                    Plus
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {post.mode === 'realtime' && !post.featured_paid && (
+          <div
+            className="bg-white border border-[#E5E5E5] rounded-card px-4 py-3 flex items-center gap-3"
+            style={{ borderWidth: '0.5px' }}
+          >
+            <span className="text-xs text-[#6B6B6B] flex-1">
+              <span style={{ color: '#534AB7' }}>✨</span> Want this decision Featured on the desktop feed?
+            </span>
+            <div className="flex gap-2 shrink-0">
+              {isPlus ? (
+                <button
+                  onClick={() => api.requestFeature(post.id, session?.access_token).then(() => loadFeed())}
+                  className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
+                >
+                  Get Featured
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setFeaturePayPostId(post.id)}
+                    className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
+                  >
+                    Pay £0.99
+                  </button>
+                  <button
+                    onClick={() => navigate('/pricing')}
+                    className="px-3 py-1.5 border border-[#534AB7] text-[#534AB7] text-xs font-semibold rounded-lg"
+                  >
+                    Plus
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <>
     <div className="flex flex-col h-full bg-[#F5F5F5]">
-      <header className="shrink-0 z-20 bg-white border-b border-[#E5E5E5]" style={{ borderBottomWidth: '0.5px' }}>
+      {isDesktop ? (
+        <DesktopTopNav tab={tab} setTab={setTab} />
+      ) : (
+      <header className="md:hidden shrink-0 z-20 bg-white border-b border-[#E5E5E5]" style={{ borderBottomWidth: '0.5px' }}>
 
         {/* App bar */}
         <div className="flex justify-center">
@@ -434,7 +584,79 @@ export default function FeedScreen() {
           </div>
         )}
       </header>
+      )}
 
+      {isDesktop ? (
+      <main className="flex-1 overflow-hidden">
+        <div className="h-full max-w-app-desktop mx-auto flex gap-8 px-6">
+          <div className="h-full overflow-y-auto pt-6 pb-10 scrollbar-hide">
+            {tab === 'myvotes' ? (
+              <MyVotesSidebar myVotes={myVotes} myVotesStats={myVotesStats} />
+            ) : (
+              <CategorySidebar
+                catFilter={catFilter}
+                setCatFilter={setCatFilter}
+                isPlus={isPlus}
+                activeCount={posts.filter(p => p.status === 'active').length}
+                liveCount={realtimePosts.length}
+                categoryVotes={categoryVotes}
+              />
+            )}
+          </div>
+
+          <div className="flex-1 min-w-0 h-full overflow-y-auto scrollbar-hide pt-6 pb-10">
+            {loading ? (
+              <FeedSkeleton />
+            ) : tab === 'myvotes' ? (
+              <MyVotesContent
+                myVotes={myVotes}
+                myVotesStats={myVotesStats}
+                user={user}
+                navigate={navigate}
+              />
+            ) : tab === 'mine' ? (
+              <section>
+                {mineCounts.all > 0 && (
+                  <div className="mb-4">
+                    <MineStatusFilter value={mineStatusFilter} onChange={setMineStatusFilter} counts={mineCounts} />
+                  </div>
+                )}
+                {mainPosts.length === 0 ? (
+                  <EmptyState tab="mine" onPost={() => navigate('/create')} filtered={mineStatusFilter !== 'all'} />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {mainPosts.map(renderMinePostCard)}
+                  </div>
+                )}
+              </section>
+            ) : (
+              <>
+                {tab !== 'live' && (
+                  <DesktopLiveStrip
+                    posts={realtimePosts}
+                    fadingStripIds={fadingStripIds}
+                    collapsingStripIds={collapsingStripIds}
+                    onOpen={setSelectedLivePost}
+                    onExpire={handleStripExpire}
+                  />
+                )}
+                {mainPosts.length === 0 ? (
+                  tab === 'foryou' && allForYouVoted ? (
+                    <AllCaughtUpState onBrowseLive={() => setTab('live')} />
+                  ) : (
+                    realtimePosts.length === 0 && <EmptyState tab={tab} onPost={() => navigate('/create')} />
+                  )
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {mainPosts.map(renderMainPostCard)}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </main>
+      ) : (
       <main className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         <div className="w-full max-w-app mx-auto pb-28">
           {loading ? (
@@ -450,52 +672,15 @@ export default function FeedScreen() {
           ) : tab === 'mine' ? (
             /* ── My Posts ───────────────────────────────────────────── */
             <section className="px-4 pt-4 space-y-4">
+              {mineCounts.all > 0 && (
+                <div className="overflow-x-auto scrollbar-hide -mx-4 px-4">
+                  <MineStatusFilter value={mineStatusFilter} onChange={setMineStatusFilter} counts={mineCounts} />
+                </div>
+              )}
               {mainPosts.length === 0 ? (
                 <EmptyState tab="mine" onPost={() => navigate('/create')} />
               ) : (
-                mainPosts.map(post => {
-                  const hasVerdict = post.ai_verdicts?.length > 0
-                  return (
-                    <div key={post.id} className="space-y-1">
-                      <PostCard post={post} currentUserId={user?.id} isMyPostsView />
-                      {!hasVerdict && (
-                        <div
-                          className="bg-white border border-[#E5E5E5] rounded-card px-4 py-3 flex items-center gap-3"
-                          style={{ borderWidth: '0.5px' }}
-                        >
-                          <span className="text-xs text-[#6B6B6B] flex-1">
-                            <span style={{ color: '#534AB7' }}>✨</span> Want AI insight on this decision?
-                          </span>
-                          <div className="flex gap-2 shrink-0">
-                            {isPlus ? (
-                              <button
-                                onClick={() => api.requestAiVerdict(post.id, session?.access_token).then(() => loadFeed())}
-                                className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
-                              >
-                                Get AI verdict
-                              </button>
-                            ) : (
-                              <>
-                                <button
-                                  onClick={() => setAiPayPostId(post.id)}
-                                  className="px-3 py-1.5 bg-[#534AB7] text-white text-xs font-semibold rounded-lg"
-                                >
-                                  Pay £0.99
-                                </button>
-                                <button
-                                  onClick={() => navigate('/pricing')}
-                                  className="px-3 py-1.5 border border-[#534AB7] text-[#534AB7] text-xs font-semibold rounded-lg"
-                                >
-                                  Plus
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })
+                mainPosts.map(renderMinePostCard)
               )}
             </section>
           ) : (
@@ -549,45 +734,14 @@ export default function FeedScreen() {
                     realtimePosts.length === 0 && <EmptyState tab={tab} onPost={() => navigate('/create')} />
                   )
                 ) : (
-                  mainPosts.map(post => {
-                    const isForYouCollapsing = collapsingPostIds.has(post.id)
-                    const isLiveCollapsing   = expiryCollapsingIds.has(post.id)
-                    const isExpiring         = expiringPostIds.has(post.id)
-
-                    let wrapperStyle
-                    if (isForYouCollapsing) {
-                      wrapperStyle = {
-                        maxHeight: 0, opacity: 0, overflow: 'hidden', marginBottom: -12,
-                        transition: 'opacity 2s ease, max-height 0.4s ease-in 2s, margin-bottom 0.4s ease 2s',
-                      }
-                    } else if (isLiveCollapsing) {
-                      wrapperStyle = {
-                        maxHeight: 0, overflow: 'hidden', marginBottom: -12,
-                        transition: 'max-height 0.4s ease-in, margin-bottom 0.4s ease',
-                      }
-                    } else {
-                      wrapperStyle = { overflow: 'hidden', maxHeight: 2000 }
-                    }
-
-                    return (
-                      <div key={post.id} style={wrapperStyle}>
-                        <PostCard
-                          post={post}
-                          currentUserId={user?.id}
-                          isForYou={tab === 'foryou'}
-                          onVoteStart={handleVoteStart}
-                          onVoteAnimationComplete={handleVoteAnimationComplete}
-                          expiryPhase={isExpiring && post.id === animatingPostId ? expiryPhase : 'none'}
-                        />
-                      </div>
-                    )
-                  })
+                  mainPosts.map(renderMainPostCard)
                 )}
               </section>
             </>
           )}
         </div>
       </main>
+      )}
     </div>
 
     {/* AI verdict payment modal */}
@@ -600,14 +754,24 @@ export default function FeedScreen() {
       />
     )}
 
+    {/* Featured-placement payment modal */}
+    {featurePayPostId && (
+      <PaymentModal
+        featureLabel="Featured placement on the desktop feed"
+        price="£0.99"
+        onClose={() => setFeaturePayPostId(null)}
+        onPurchase={() => handleFeaturePurchase(featurePayPostId)}
+      />
+    )}
+
     {/* Live strip inline vote sheet */}
     {selectedLivePost && (
       <div
-        className="fixed inset-0 z-50 flex flex-col justify-end"
+        className="fixed inset-0 z-50 flex flex-col justify-end md:items-center md:justify-center"
         style={{ opacity: liveSheetFading ? 0 : 1, transition: liveSheetFading ? 'opacity 0.8s ease' : undefined }}
       >
         <div className="absolute inset-0 bg-black/50" onClick={() => setSelectedLivePost(null)} />
-        <div className="relative bg-[#F5F5F5] rounded-t-2xl px-4 pt-4 pb-8" onClick={e => e.stopPropagation()}>
+        <div className="relative bg-[#F5F5F5] rounded-t-2xl md:rounded-2xl px-4 pt-4 pb-8 md:max-w-md md:w-full" onClick={e => e.stopPropagation()}>
           <div className="w-10 h-1 bg-[#D0D0D0] rounded-full mx-auto mb-4" />
           <PostCard
             post={selectedLivePost}
@@ -653,183 +817,4 @@ function MyVotesContent({ myVotes, myVotesStats, user, navigate }) {
         <p className="text-sm text-[#6B6B6B] mb-6">Your full voting history lives here.</p>
         <button
           onClick={() => navigate('/login')}
-          className="px-6 py-3 bg-[#534AB7] text-white rounded-btn text-sm font-semibold"
-        >
-          Sign in
-        </button>
-      </div>
-    )
-  }
-
-  if (myVotes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-        <p className="text-4xl mb-4">🗳️</p>
-        <p className="font-semibold text-[#1A1A1A] mb-1">No votes yet</p>
-        <p className="text-sm text-[#6B6B6B] mb-6">Start voting on polls to build your history.</p>
-      </div>
-    )
-  }
-
-  return (
-    <>
-      <div className="px-4 pt-4 pb-2">
-        <p className="text-sm text-[#6B6B6B]">
-          <span className="font-semibold text-[#1A1A1A]">{myVotesStats.total}</span> polls decided
-          {' · '}You agree with the majority{' '}
-          <span className="font-semibold" style={{ color: '#534AB7' }}>{myVotesStats.majorityAgreePercent}%</span>
-          {' '}of the time
-        </p>
-      </div>
-      <section className="px-4 pt-2 space-y-3">
-        {myVotes.map(vote => (
-          <PostCard
-            key={`${vote.id}_vote`}
-            post={vote}
-            currentUserId={user?.id}
-            initialVotedOptionId={vote.voted_option_id}
-          />
-        ))}
-      </section>
-    </>
-  )
-}
-
-function LiveCard({ post, onOpen, onExpire }) {
-  const options    = post.options || []
-  const totalVotes = options.reduce((s, o) => s + (o.vote_count || 0), 0)
-  const [activeIdx, setActiveIdx] = useState(0)
-  const [visible, setVisible]     = useState(true)
-  const hasFiredRef = useRef(false)
-
-  useEffect(() => {
-    if (options.length < 2) return
-    const id = setInterval(() => {
-      setVisible(false)
-      setTimeout(() => {
-        setActiveIdx(i => (i + 1) % options.length)
-        setVisible(true)
-      }, 800)
-    }, 3500)
-    return () => clearInterval(id)
-  }, [options.length])
-
-  // Independent countdown — fires onExpire the moment expires_at passes
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (!hasFiredRef.current && new Date(post.expires_at) <= new Date()) {
-        hasFiredRef.current = true
-        onExpire?.(post.id)
-      }
-    }, 1000)
-    return () => clearInterval(id)
-  }, [post.expires_at, post.id])
-
-  // Also react immediately if realtime marks status closed
-  useEffect(() => {
-    if (post.status === 'closed' && !hasFiredRef.current) {
-      hasFiredRef.current = true
-      onExpire?.(post.id)
-    }
-  }, [post.status])
-
-  const cover    = options[activeIdx]?.photo_url
-  const optLabel = String.fromCharCode(65 + activeIdx)
-
-  return (
-    <button
-      onClick={onOpen}
-      className="relative shrink-0 rounded-card overflow-hidden text-left"
-      style={{ width: 160, height: 240 }}
-    >
-      {cover
-        ? <img
-            src={cover}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover"
-            style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.8s ease' }}
-          />
-        : <div className="absolute inset-0 bg-[#E5E5E5]" />
-      }
-
-      <div
-        className="absolute inset-x-0 bottom-0"
-        style={{ height: '55%', background: 'linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.3) 55%, transparent 100%)' }}
-      />
-
-      <div className="absolute top-2 right-2">
-        <TimerRing expiresAt={post.expires_at} totalMinutes={15} size="sm" />
-      </div>
-
-      <div
-        className="absolute top-2 left-2 bg-white/90 rounded-full px-2 py-0.5"
-        style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.8s ease' }}
-      >
-        <span className="text-[10px] font-bold text-[#1A1A1A]">{optLabel}</span>
-      </div>
-
-      <div className="absolute bottom-0 inset-x-0 p-3">
-        <p className="text-white text-xs font-semibold leading-snug line-clamp-2">{post.question}</p>
-        <p className="text-white font-bold text-[10px] mt-1">{totalVotes} vote{totalVotes !== 1 ? 's' : ''}</p>
-      </div>
-    </button>
-  )
-}
-
-function FeedSkeleton() {
-  return (
-    <div className="px-4 pt-4 space-y-3">
-      {[1, 2, 3].map(i => (
-        <div key={i} className="bg-white rounded-card p-4 animate-pulse">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-full bg-[#E5E5E5]" />
-            <div className="h-3 w-24 bg-[#E5E5E5] rounded" />
-          </div>
-          <div className="h-4 w-3/4 bg-[#E5E5E5] rounded mb-3" />
-          <div className="grid grid-cols-2 gap-2">
-            <div className="aspect-square bg-[#E5E5E5] rounded-lg" />
-            <div className="aspect-square bg-[#E5E5E5] rounded-lg" />
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function EmptyState({ tab, onPost }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-      <p className="text-4xl mb-4">🔀</p>
-      <p className="font-semibold text-[#1A1A1A] mb-1">
-        {tab === 'mine' ? 'No posts yet' : 'Nothing here yet'}
-      </p>
-      <p className="text-sm text-[#6B6B6B] mb-6">
-        {tab === 'mine'
-          ? 'Create your first post and get instant votes.'
-          : 'Be the first to post something.'}
-      </p>
-      <button
-        onClick={onPost}
-        className="px-6 py-3 bg-[#534AB7] text-white rounded-btn text-sm font-semibold"
-      >
-        Create a post
-      </button>
-    </div>
-  )
-}
-
-function AllCaughtUpState({ onBrowseLive }) {
-  return (
-    <div className="flex flex-col items-center justify-center py-20 text-center px-8">
-      <p className="text-4xl mb-4">✅</p>
-      <p className="font-semibold text-[#1A1A1A] mb-1">You're all caught up!</p>
-      <p className="text-sm text-[#6B6B6B] mb-6">Check back soon for new polls.</p>
-      <button
-        onClick={onBrowseLive}
-        className="px-6 py-3 bg-[#534AB7] text-white rounded-btn text-sm font-semibold"
-      >
-        Browse Live
-      </button>
-    </div>
-  )
-}
+          className="px-6 py-3 bg-[#534AB7] text-white rounde

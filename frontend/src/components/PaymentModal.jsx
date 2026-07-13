@@ -2,10 +2,10 @@ import { X } from 'lucide-react'
 
 export default function PaymentModal({ featureLabel, price, onClose, onPurchase }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-end" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end md:items-center md:justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40" />
       <div
-        className="relative w-full bg-white rounded-t-2xl px-6 pt-5 pb-10 max-w-app mx-auto"
+        className="relative w-full bg-white rounded-t-2xl md:rounded-2xl px-6 pt-5 pb-10 max-w-app md:max-w-md mx-auto"
         onClick={e => e.stopPropagation()}
       >
         <button onClick={onClose} className="absolute top-4 right-4 p-1 text-[#6B6B6B]">
@@ -22,8 +22,4 @@ export default function PaymentModal({ featureLabel, price, onClose, onPurchase 
         >
           Pay {price} — unlock now
         </button>
-        <p className="text-center text-xs text-[#6B6B6B] mt-3">This is a demo — no real payment is taken.</p>
-      </div>
-    </div>
-  )
-}
+        <p className="text-center text-xs text-[#6B6B6B] mt-3">This is a demo —

@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from './contexts/AuthContext'
+import { useIsDesktop } from './hooks/useIsDesktop'
 import BottomNav from './components/BottomNav'
 import FeedScreen          from './screens/FeedScreen'
 import PostDetailScreen    from './screens/PostDetailScreen'
@@ -19,6 +20,7 @@ function ProtectedRoute({ children }) {
 
 export default function App() {
   const { loading } = useAuth()
+  const isDesktop = useIsDesktop()
 
   if (loading) {
     return (
@@ -41,7 +43,7 @@ export default function App() {
         {/* Public routes with bottom nav */}
         <Route path="/" element={<>
           <FeedScreen />
-          <BottomNav />
+          {isDesktop ? null : <BottomNav />}
         </>} />
         <Route path="/post/:id" element={<>
           <PostDetailScreen />
@@ -58,10 +60,4 @@ export default function App() {
           <ProfileScreen />
           <BottomNav />
         </>} />
-        <Route path="/pricing" element={<PricingScreen />} />
-
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </div>
-  )
-}
+        <Route path="/pricing" element={<PricingScree

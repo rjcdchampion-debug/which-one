@@ -19,11 +19,8 @@ export default {
       },
       maxWidth: {
         app: '430px',
+        'app-desktop': '1240px',
       },
       fontFamily: {
         sans: ['system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
-      },
-    },
-  },
-  plugins: [],
-}
+     
