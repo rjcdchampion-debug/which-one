@@ -335,6 +335,19 @@ export default function FeedScreen() {
   )
   const realtimePosts = isDesktop ? realtimePostsSorted : realtimePostsSorted.slice(0, 3)
 
+  // Desktop Featured/Live Now strip pool — deliberately NOT run through filterByCat
+  // or the hasVoted exclusion. realtimePosts above is scoped to the viewer's current
+  // category filter and (on For You) hides posts they've already voted on, so it can
+  // legitimately hit zero — e.g. a single category between seed-cycle top-ups, or an
+  // active voter who's cleared every post in their filter. The strip is a discovery
+  // surface, not the personalized feed: it should stay populated with whatever's live
+  // system-wide (real posts first, seed posts fill the rest per seed-posts.js's
+  // per-category floor) and only go empty when there are truly zero active realtime
+  // posts anywhere.
+  const stripPosts = posts
+    .filter(p => p.mode === 'realtime' && p.status === 'active')
+    .sort((a, b) => new Date(a.expires_at) - new Date(b.expires_at))
+
   // Main post list
   const mainPosts = tab === 'myvotes' ? [] : filterByCat(
     posts
@@ -633,7 +646,7 @@ export default function FeedScreen() {
               <>
                 {tab !== 'live' && (
                   <DesktopLiveStrip
-                    posts={realtimePosts}
+                    posts={stripPosts}
                     fadingStripIds={fadingStripIds}
                     collapsingStripIds={collapsingStripIds}
                     onOpen={setSelectedLivePost}
