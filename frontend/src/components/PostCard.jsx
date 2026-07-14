@@ -13,6 +13,9 @@ const CATEGORY_COLOURS = {
   home:    '#185FA5',
   design:  '#1A1A1A',
   beauty:  '#993C1D',
+  travel:  '#B8860B',
+  sport:   '#2F7D4F',
+  pets:    '#B5495B',
   other:   '#6B6B6B',
 }
 

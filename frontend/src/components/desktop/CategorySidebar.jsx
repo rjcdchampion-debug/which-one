@@ -9,7 +9,38 @@ const CATEGORY_COLOURS = {
   home:    '#185FA5',
   design:  '#1A1A1A',
   beauty:  '#993C1D',
+  travel:  '#B8860B',
+  sport:   '#2F7D4F',
+  pets:    '#B5495B',
 }
+
+// Matches CreatePostScreen's CATEGORIES icons so a category has the same glyph
+// everywhere in the app (post creation, this sidebar) — another spot that's
+// duplicated and kept in sync manually, same situation as CATEGORY_COLOURS above.
+const CATEGORY_ICONS = {
+  fashion: '👗',
+  food:    '🍽️',
+  home:    '🏠',
+  design:  '🎨',
+  beauty:  '💄',
+  travel:  '🧳',
+  sport:   '⚽',
+  pets:    '🐾',
+}
+
+// This panel is pinned to a fixed height so it visually pairs with the right
+// column: its bottom edge lines up with the bottom of the "Featured" hero image,
+// and the (larger than default) gap below it lines up "Live stats" with the top
+// of the "Live now" photos. Both numbers come from DesktopLiveStrip.jsx's actual
+// markup — if the hero height or the label/spacing there ever changes, these need
+// to change too:
+//   Featured label (text-xs line-height 16 + mb-3 12)        = 28
+//   HeroBanner height (literal, DesktopLiveStrip.jsx)         = 220
+//   → Featured section bottom, from top of column             = 248  = CATEGORIES_PANEL_HEIGHT
+//   mt-6 gap (24) + Live now label (28) + card padding (8)    = 60   = GAP_TO_LIVE_STATS
+//   → Live now photos top, from top of column                 = 308
+const CATEGORIES_PANEL_HEIGHT = 248
+const GAP_TO_LIVE_STATS = 60 // the parent's flex `gap-5` already contributes 20 of this
 
 export default function CategorySidebar({ catFilter, setCatFilter, isPlus, activeCount, liveCount, categoryVotes = [] }) {
   const navigate = useNavigate()
@@ -18,33 +49,37 @@ export default function CategorySidebar({ catFilter, setCatFilter, isPlus, activ
 
   return (
     <aside className="w-60 shrink-0 flex flex-col gap-5 pr-2">
-      {/* Category filter */}
-      <div>
-        <p className="text-xs font-semibold text-[#6B6B6B] uppercase tracking-wide mb-2 px-1">Categories</p>
-        <div className="flex flex-col gap-0.5">
+      {/* Category filter — icon grid, height-matched to the Featured hero (see constants above) */}
+      <div
+        className="bg-white border border-[#E5E5E5] rounded-card p-4 flex flex-col"
+        style={{ borderWidth: '0.5px', height: CATEGORIES_PANEL_HEIGHT, marginBottom: GAP_TO_LIVE_STATS - 20 }}
+      >
+        <p className="text-xs font-semibold text-[#6B6B6B] uppercase tracking-wide mb-2">Categories</p>
+        <div className="grid grid-cols-2 gap-1.5 flex-1">
           <button
             onClick={() => setCatFilter('all')}
-            className="text-left px-3 py-2 rounded-btn text-sm font-medium transition-colors flex items-center gap-2.5"
+            className="flex items-center gap-1.5 px-2 py-1.5 rounded-btn text-xs font-medium transition-colors"
             style={{
-              background: catFilter === 'all' ? '#534AB7' : 'transparent',
+              gridColumn: '1 / -1',
+              background: catFilter === 'all' ? '#534AB7' : '#F5F5F3',
               color:      catFilter === 'all' ? '#FFFFFF' : '#1A1A1A',
             }}
           >
-            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catFilter === 'all' ? '#FFFFFF' : '#534AB7' }} />
+            <Sparkles size={13} className={catFilter === 'all' ? 'text-white shrink-0' : 'text-[#534AB7] shrink-0'} />
             All
           </button>
           {CAT_FILTERS.filter(c => c.id !== 'all').map(c => (
             <button
               key={c.id}
               onClick={() => setCatFilter(c.id)}
-              className="text-left px-3 py-2 rounded-btn text-sm font-medium transition-colors flex items-center gap-2.5"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-btn text-xs font-medium transition-colors"
               style={{
-                background: catFilter === c.id ? '#534AB7' : 'transparent',
+                background: catFilter === c.id ? '#534AB7' : '#F5F5F3',
                 color:      catFilter === c.id ? '#FFFFFF' : '#1A1A1A',
               }}
             >
-              <span className="w-2 h-2 rounded-full shrink-0" style={{ background: catFilter === c.id ? '#FFFFFF' : CATEGORY_COLOURS[c.id] }} />
-              {c.label}
+              <span className="shrink-0">{CATEGORY_ICONS[c.id]}</span>
+              <span className="truncate">{c.label}</span>
             </button>
           ))}
         </div>

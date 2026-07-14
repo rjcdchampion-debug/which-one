@@ -14,6 +14,9 @@ const CATEGORIES = [
   { id: 'home',    label: 'Home',    icon: '🏠' },
   { id: 'design',  label: 'Design',  icon: '🎨' },
   { id: 'beauty',  label: 'Beauty',  icon: '💄' },
+  { id: 'travel',  label: 'Travel',  icon: '🧳' },
+  { id: 'sport',   label: 'Sport',   icon: '⚽' },
+  { id: 'pets',    label: 'Pets',    icon: '🐾' },
   { id: 'other',   label: 'Other',   icon: '✨' },
 ]
 
@@ -23,6 +26,9 @@ const QUESTION_PLACEHOLDERS = {
   home:    'Which fits better in the space?',
   design:  'Which design direction?',
   beauty:  'Which look for tonight?',
+  travel:  'Which destination or view wins?',
+  sport:   'Which one takes the game?',
+  pets:    'Which is cuter — you decide?',
   other:   'Help me decide…',
 }
 

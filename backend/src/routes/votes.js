@@ -14,6 +14,12 @@ function indexBy(arr, key) {
   return arr.reduce((acc, item) => { acc[item[key]] = item; return acc }, {})
 }
 
+// See posts.js sortOptions — options have no reliable DB-ordered column, so we
+// restore the intended A/B/C/D display order by sorting on label after fetch.
+function sortOptions(arr) {
+  return [...arr].sort((a, b) => (a.label || '').localeCompare(b.label || ''))
+}
+
 // GET /api/votes/mine — returns posts the current user voted on, newest first
 router.get('/mine', async (req, res) => {
   try {
@@ -70,7 +76,7 @@ router.get('/mine', async (req, res) => {
         if (!p) return null
         return {
           ...p,
-          options:         optionsByPost[id]  || [],
+          options:         sortOptions(optionsByPost[id] || []),
           users:           usersById[p.user_id] || null,
           ai_verdicts:     verdictsByPost[id] || [],
           voted_option_id: voteByPost[id].option_id,
@@ -189,11 +195,12 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Return refreshed options
+    // Return refreshed options — sorted by label since Supabase doesn't guarantee
+    // fetch order, and this array replaces PostCard's option state positionally.
     const { data: updatedOptions } = await supabase
       .from('options').select('*').eq('post_id', post_id)
 
-    res.json({ success: true, post: { options: updatedOptions } })
+    res.json({ success: true, post: { options: sortOptions(updatedOptions || []) } })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

@@ -65,7 +65,7 @@ async function enrichPosts(posts) {
 
   return posts.map(p => ({
     ...p,
-    options:     optionsByPost[p.id] || [],
+    options:     sortOptions(optionsByPost[p.id] || []),
     users:       usersById[p.user_id] || null,
     ai_verdicts: verdictsByPost[p.id] || [],
   }))
@@ -81,6 +81,16 @@ function groupBy(arr, key) {
 
 function indexBy(arr, key) {
   return arr.reduce((acc, item) => { acc[item[key]] = item; return acc }, {})
+}
+
+// Options have no reliable DB-ordered column (no display_order in the live schema,
+// and Postgres doesn't guarantee scan order for un-ORDER-BY'd selects — a row's
+// physical position can shift after an UPDATE, e.g. every time vote_count changes).
+// Labels are always assigned "Option A", "Option B", ... at creation time (seed-posts.js,
+// CreatePostScreen), so sorting by label deterministically restores the intended
+// A/B/C/D display order regardless of fetch order.
+function sortOptions(arr) {
+  return [...arr].sort((a, b) => (a.label || '').localeCompare(b.label || ''))
 }
 
 // ── GET /api/posts ────────────────────────────────────────────────────────────
@@ -268,8 +278,10 @@ router.post('/:id/ai-verdict', authMiddleware, async (req, res) => {
         const text = response.content[0]?.text?.trim() || ''
         const match = text.match(/Option\s+([A-D])/i)
         if (match) {
-          const idx = match[1].toUpperCase().charCodeAt(0) - 65
-          recommendedOption = options[idx] || options[0]
+          // Look up by label, not array index — options come back from Supabase
+          // in no guaranteed order, so "Option B" isn't reliably at index 1.
+          const letter = match[1].toUpperCase()
+          recommendedOption = options.find(o => o.label?.toUpperCase() === `OPTION ${letter}`) || options[0]
         }
         reason = text.replace(/^Option\s+[A-D]:\s*/i, '').trim() || reason
       } catch (aiErr) {

@@ -12,4 +12,7 @@ export const CAT_FILTERS = [
   { id: 'home',    label: 'Home'    },
   { id: 'design',  label: 'Design'  },
   { id: 'beauty',  label: 'Beauty'  },
+  { id: 'travel',  label: 'Travel'  },
+  { id: 'sport',   label: 'Sport'   },
+  { id: 'pets',    label: 'Pets'    },
 ]

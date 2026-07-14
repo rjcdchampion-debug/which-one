@@ -8,6 +8,40 @@ function getSecondsLeft(expiresAt) {
   return Math.max(0, Math.floor((new Date(expiresAt) - Date.now()) / 1000))
 }
 
+// Colour stops in urgency order (calmest → most urgent).
+const PURPLE = [0x53, 0x4a, 0xb7]
+const AMBER  = [0xf5, 0x9e, 0x0b]
+const CORAL  = [0x99, 0x3c, 0x1d]
+
+// Crossfade band (seconds) either side of each threshold — replaces the old
+// hard cut at exactly 5min/2min with a gradual blend, so the ring never snaps
+// to a new colour mid-render.
+const BAND = 20
+
+function mix(c1, c2, t) {
+  const r = Math.round(c1[0] + (c2[0] - c1[0]) * t)
+  const g = Math.round(c1[1] + (c2[1] - c1[1]) * t)
+  const b = Math.round(c1[2] + (c2[2] - c1[2]) * t)
+  return `rgb(${r}, ${g}, ${b})`
+}
+
+function getColor(secondsLeft) {
+  const upper = 300 // 5 min
+  const lower = 120 // 2 min
+
+  if (secondsLeft >= upper + BAND) return mix(PURPLE, PURPLE, 0) // pure purple
+  if (secondsLeft > upper - BAND) {
+    const t = (upper + BAND - secondsLeft) / (2 * BAND)
+    return mix(PURPLE, AMBER, Math.min(1, Math.max(0, t)))
+  }
+  if (secondsLeft > lower + BAND) return mix(AMBER, AMBER, 0) // pure amber
+  if (secondsLeft > lower - BAND) {
+    const t = (lower + BAND - secondsLeft) / (2 * BAND)
+    return mix(AMBER, CORAL, Math.min(1, Math.max(0, t)))
+  }
+  return mix(CORAL, CORAL, 0)
+}
+
 export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', showThumbsUp = false }) {
   const [secondsLeft, setSecondsLeft] = useState(() => getSecondsLeft(expiresAt))
 
@@ -21,10 +55,7 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', s
   const progress = totalSeconds > 0 ? secondsLeft / totalSeconds : 0
   const dashOffset = CIRCUMFERENCE * (1 - progress)
 
-  const color =
-    secondsLeft < 120 ? '#993C1D' :
-    secondsLeft < 300 ? '#f59e0b' :
-    '#534AB7'
+  const color = getColor(secondsLeft)
 
   const mins = Math.floor(secondsLeft / 60)
   const secs = secondsLeft % 60
@@ -71,10 +102,10 @@ export default function TimerRing({ expiresAt, totalMinutes = 15, size = 'md', s
           strokeDasharray={CIRCUMFERENCE}
           strokeDashoffset={dashOffset}
           strokeLinecap="round"
-          style={{ transition: 'stroke-dashoffset 1s linear, stroke 0.3s ease' }}
+          style={{ transition: 'stroke-dashoffset 1s linear, stroke 1s ease' }}
         />
       </svg>
-      <span className="relative font-bold" style={{ fontSize: size === 'sm' ? 11 : 12, color }}>
+      <span className="relative font-bold" style={{ fontSize: size === 'sm' ? 11 : 12, color, transition: 'color 1s ease' }}>
         {label}
       </span>
     </div>

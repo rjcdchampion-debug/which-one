@@ -95,6 +95,7 @@ export default function FeedScreen() {
 
   // Live strip expiry (fade + slide left)
   const stripTimersRef = useRef([])
+  const processedStripIdsRef = useRef(new Set()) // parent-level guard, same pattern as processedPostIdsRef above — handleStripExpire used to rely solely on each LiveCard's local hasFiredRef, which resets if that card ever remounts, letting the fade→collapse→close sequence refire and read as flicker (worst on whichever card is soonest to expire, since the strip is sorted by urgency)
   const [fadingStripIds, setFadingStripIds]       = useState(new Set())
   const [collapsingStripIds, setCollapsingStripIds] = useState(new Set())
 
@@ -153,6 +154,7 @@ export default function FeedScreen() {
     // Clear strip expiry
     stripTimersRef.current.forEach(clearTimeout)
     stripTimersRef.current = []
+    processedStripIdsRef.current = new Set()
     setFadingStripIds(new Set())
     setCollapsingStripIds(new Set())
   }, [tab])
@@ -201,6 +203,17 @@ export default function FeedScreen() {
     }, 1000)
     return () => clearInterval(id)
   }, [tab])
+
+  // Mobile live strip: one shared tick drives photo-cycling for every LiveCard
+  // instead of each card running its own setInterval. Independent per-card timers
+  // started at each card's own mount time, so cards drifted out of phase and
+  // flipped at different moments — this keeps every card in the strip on the same
+  // 3500ms beat regardless of when it mounted.
+  const [liveCycleTick, setLiveCycleTick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => setLiveCycleTick(t => t + 1), 3500)
+    return () => clearInterval(id)
+  }, [])
 
   // Supabase realtime subscription
   useEffect(() => {
@@ -267,6 +280,11 @@ export default function FeedScreen() {
   }
 
   function handleStripExpire(postId) {
+    // Idempotent regardless of whether the calling LiveCard remounts (see
+    // processedStripIdsRef above) — without this, a remount resets that card's
+    // local hasFiredRef and re-runs the whole fade→collapse→close sequence.
+    if (processedStripIdsRef.current.has(postId)) return
+    processedStripIdsRef.current.add(postId)
     setFadingStripIds(prev => new Set([...prev, postId]))
     const t1 = setTimeout(() => {
       setFadingStripIds(prev => { const s = new Set(prev); s.delete(postId); return s })
@@ -730,6 +748,7 @@ export default function FeedScreen() {
                             post={post}
                             onOpen={() => setSelectedLivePost(post)}
                             onExpire={handleStripExpire}
+                            cycleTick={liveCycleTick}
                           />
                         </div>
                       )

@@ -1,106 +1,174 @@
 const { supabase } = require('./supabaseClient')
 
-// LoremFlickr — category-specific photos, deterministic per lock value, no API key needed
-const LOREMFLICKR_KEYWORDS = {
+// LoremFlickr — category-specific photos, deterministic per lock value, no API key needed.
+//
+// Seed photo quality: LOREMFLICKR_KEYWORDS used to be one generic tag per category
+// (e.g. all of "food" pulled from the same 30-photo "food" pool), then paired with
+// a random question from CATEGORY_QUESTIONS — so a "Sushi or ramen tonight?" post
+// could just as easily get two random salad/cake photos, since the photo pick and
+// the question pick were fully decoupled. This is the lighter-weight fix decided on
+// this session (see Docs/ai-seed-content-pilot.md for the heavier AI-generated-photo
+// pilot, which is still the better long-term answer but needs an image-gen API key
+// that hasn't been provided yet): each question now carries its own pair of
+// LoremFlickr keywords, one per option, so the two photos are at least thematically
+// tied to what the question is actually asking. It's still stock photography, not a
+// guaranteed visual match, but far more coherent than a fully random pairing. Falls
+// back to the plain category tag for both options when a question doesn't have two
+// distinctly photographable subjects (e.g. "Which logo direction?").
+const FALLBACK_KEYWORDS = {
   fashion: 'fashion',
   food:    'food',
   home:    'interior',
   design:  'design',
   beauty:  'beauty',
+  travel:  'travel',
+  sport:   'sports',
+  pets:    'pets',
 }
 
-function categoryImages(category) {
-  const kw = LOREMFLICKR_KEYWORDS[category] || category
-  return Array.from({ length: 30 }, (_, i) =>
-    `https://loremflickr.com/400/400/${kw}?lock=${i + 1}`
+function imagesForKeyword(keyword) {
+  return Array.from({ length: 15 }, (_, i) =>
+    `https://loremflickr.com/400/400/${keyword}?lock=${i + 1}`
   )
 }
 
+// { question, keywords: [optionAKeyword, optionBKeyword] }
 const CATEGORY_QUESTIONS = {
   fashion: [
-    'Which outfit for tonight?',
-    'Casual or dressy for the party?',
-    'Which colour works better on me?',
-    'Boots or heels for this look?',
-    'Summer dress — which one?',
-    'Jacket or blazer for the office?',
-    'Skirt or trousers?',
-    'Prints or solid colours?',
-    'Light or dark tones for autumn?',
-    'Statement piece or minimal accessories?',
-    'Vintage or modern aesthetic?',
-    'Bold or neutral palette?',
-    'Layered or sleek silhouette?',
-    'Which shade of blue?',
-    'Tucked or untucked for the event?',
+    { question: 'Which outfit for tonight?',              keywords: ['outfit', 'outfit'] },
+    { question: 'Casual or dressy for the party?',        keywords: ['casual', 'dress'] },
+    { question: 'Which colour works better on me?',       keywords: ['fashion', 'fashion'] },
+    { question: 'Boots or heels for this look?',           keywords: ['boots', 'heels'] },
+    { question: 'Summer dress — which one?',               keywords: ['dress', 'dress'] },
+    { question: 'Jacket or blazer for the office?',        keywords: ['jacket', 'blazer'] },
+    { question: 'Skirt or trousers?',                      keywords: ['skirt', 'trousers'] },
+    { question: 'Prints or solid colours?',                keywords: ['pattern', 'fashion'] },
+    { question: 'Light or dark tones for autumn?',         keywords: ['fashion', 'fashion'] },
+    { question: 'Statement piece or minimal accessories?', keywords: ['jewelry', 'minimalist'] },
+    { question: 'Vintage or modern aesthetic?',            keywords: ['vintage', 'fashion'] },
+    { question: 'Bold or neutral palette?',                keywords: ['colorful', 'neutral'] },
+    { question: 'Layered or sleek silhouette?',            keywords: ['coat', 'dress'] },
+    { question: 'Which shade of blue?',                    keywords: ['blue', 'blue'] },
+    { question: 'Tucked or untucked for the event?',       keywords: ['shirt', 'shirt'] },
   ],
   food: [
-    'Pasta or risotto tonight?',
-    'Which restaurant should we try?',
-    'Spicy or mild for date night?',
-    'Sweet or savoury for dessert?',
-    'Coffee or tea this morning?',
-    'Breakfast or brunch spread — which?',
-    'Sushi or ramen tonight?',
-    'Pizza or burger for the game?',
-    'Salad or soup for lunch?',
-    'Vegan or meat option — which looks better?',
-    'Italian or Asian for the group?',
-    'Chocolate or vanilla cake?',
-    'Grilled or fried chicken?',
-    'Light starter or hearty main?',
-    'Street food or fine dining tonight?',
+    { question: 'Pasta or risotto tonight?',                    keywords: ['pasta', 'risotto'] },
+    { question: 'Which restaurant should we try?',              keywords: ['restaurant', 'restaurant'] },
+    { question: 'Spicy or mild for date night?',                keywords: ['curry', 'pasta'] },
+    { question: 'Sweet or savoury for dessert?',                keywords: ['cake', 'cheese'] },
+    { question: 'Coffee or tea this morning?',                  keywords: ['coffee', 'tea'] },
+    { question: 'Breakfast or brunch spread — which?',           keywords: ['breakfast', 'brunch'] },
+    { question: 'Sushi or ramen tonight?',                      keywords: ['sushi', 'ramen'] },
+    { question: 'Pizza or burger for the game?',                keywords: ['pizza', 'burger'] },
+    { question: 'Salad or soup for lunch?',                     keywords: ['salad', 'soup'] },
+    { question: 'Vegan or meat option — which looks better?',   keywords: ['vegetables', 'steak'] },
+    { question: 'Italian or Asian for the group?',              keywords: ['pasta', 'noodles'] },
+    { question: 'Chocolate or vanilla cake?',                   keywords: ['chocolate', 'cake'] },
+    { question: 'Grilled or fried chicken?',                    keywords: ['grill', 'chicken'] },
+    { question: 'Light starter or hearty main?',                keywords: ['salad', 'steak'] },
+    { question: 'Street food or fine dining tonight?',          keywords: ['streetfood', 'restaurant'] },
   ],
   home: [
-    'Which colour for the living room wall?',
-    'Modern or cosy feel for the space?',
-    'Plant in the corner or leave it open?',
-    'Wood or metal for the coffee table?',
-    'Sofa placement — which layout works?',
-    'Rug or no rug under the table?',
-    'Curtains or blinds for the bedroom?',
-    'Shelves or a gallery wall?',
-    'Minimalist or maximalist styling?',
-    'Warm or cool lighting for the kitchen?',
-    'Hardwood or carpet in the bedroom?',
-    'Paint or wallpaper for the feature wall?',
-    'Open plan or keep the separate rooms?',
-    'Which furniture style for the corner?',
-    'Statement piece or keep it subtle?',
+    { question: 'Which colour for the living room wall?',   keywords: ['livingroom', 'paint'] },
+    { question: 'Modern or cosy feel for the space?',       keywords: ['modern', 'cozy'] },
+    { question: 'Plant in the corner or leave it open?',    keywords: ['plant', 'interior'] },
+    { question: 'Wood or metal for the coffee table?',      keywords: ['wood', 'metal'] },
+    { question: 'Sofa placement — which layout works?',     keywords: ['sofa', 'livingroom'] },
+    { question: 'Rug or no rug under the table?',           keywords: ['rug', 'floor'] },
+    { question: 'Curtains or blinds for the bedroom?',      keywords: ['curtains', 'blinds'] },
+    { question: 'Shelves or a gallery wall?',               keywords: ['shelves', 'wall'] },
+    { question: 'Minimalist or maximalist styling?',        keywords: ['minimalist', 'interior'] },
+    { question: 'Warm or cool lighting for the kitchen?',   keywords: ['kitchen', 'lighting'] },
+    { question: 'Hardwood or carpet in the bedroom?',       keywords: ['hardwood', 'carpet'] },
+    { question: 'Paint or wallpaper for the feature wall?', keywords: ['paint', 'wallpaper'] },
+    { question: 'Open plan or keep the separate rooms?',    keywords: ['openplan', 'room'] },
+    { question: 'Which furniture style for the corner?',   keywords: ['furniture', 'furniture'] },
+    { question: 'Statement piece or keep it subtle?',       keywords: ['furniture', 'interior'] },
   ],
   design: [
-    'Which logo direction?',
-    'Minimalist or detailed layout?',
-    'Dark mode or light mode for the app?',
-    'Serif or sans-serif for this brand?',
-    'Which colour scheme feels right?',
-    'Modern or classic aesthetic?',
-    'Geometric or organic shapes?',
-    'Bold or subtle branding approach?',
-    'Custom illustration or photography?',
-    'Gradient or flat colour palette?',
-    'Which font pairing works better?',
-    'Symmetrical or asymmetrical layout?',
-    'Playful or professional tone?',
-    'Line icons or filled icons?',
-    'Which grid layout for the homepage?',
+    { question: 'Which logo direction?',                keywords: ['logo', 'logo'] },
+    { question: 'Minimalist or detailed layout?',       keywords: ['minimalist', 'pattern'] },
+    { question: 'Dark mode or light mode for the app?', keywords: ['dark', 'light'] },
+    { question: 'Serif or sans-serif for this brand?',  keywords: ['typography', 'typography'] },
+    { question: 'Which colour scheme feels right?',     keywords: ['colorful', 'design'] },
+    { question: 'Modern or classic aesthetic?',         keywords: ['modern', 'classic'] },
+    { question: 'Geometric or organic shapes?',         keywords: ['geometric', 'abstract'] },
+    { question: 'Bold or subtle branding approach?',    keywords: ['branding', 'design'] },
+    { question: 'Custom illustration or photography?',  keywords: ['illustration', 'photography'] },
+    { question: 'Gradient or flat colour palette?',     keywords: ['gradient', 'design'] },
+    { question: 'Which font pairing works better?',     keywords: ['typography', 'typography'] },
+    { question: 'Symmetrical or asymmetrical layout?',  keywords: ['pattern', 'design'] },
+    { question: 'Playful or professional tone?',        keywords: ['colorful', 'minimalist'] },
+    { question: 'Line icons or filled icons?',           keywords: ['design', 'design'] },
+    { question: 'Which grid layout for the homepage?',  keywords: ['design', 'design'] },
   ],
   beauty: [
-    'Natural or bold makeup for tonight?',
-    'Which nail colour for the wedding?',
-    'Curly or straight — which suits me?',
-    'Red or nude lip for the occasion?',
-    'Summer glow or matte finish?',
-    'Smokey eye or cat eye?',
-    'Dewy or satin highlighter?',
-    'Warm or cool blush shade?',
-    'Hair up or down for the event?',
-    'Bold lashes or natural look?',
-    'Matte or dewy foundation finish?',
-    'Arched or soft eyebrow shape?',
-    'Bronzer or contour for my face shape?',
-    'Lip gloss or tinted lip balm?',
-    'Which hair colour direction?',
+    { question: 'Natural or bold makeup for tonight?',      keywords: ['makeup', 'makeup'] },
+    { question: 'Which nail colour for the wedding?',       keywords: ['nails', 'nails'] },
+    { question: 'Curly or straight — which suits me?',      keywords: ['curls', 'hairstyle'] },
+    { question: 'Red or nude lip for the occasion?',        keywords: ['lipstick', 'lipstick'] },
+    { question: 'Summer glow or matte finish?',             keywords: ['makeup', 'makeup'] },
+    { question: 'Smokey eye or cat eye?',                   keywords: ['eyeshadow', 'eyeliner'] },
+    { question: 'Dewy or satin highlighter?',               keywords: ['makeup', 'makeup'] },
+    { question: 'Warm or cool blush shade?',                keywords: ['blush', 'makeup'] },
+    { question: 'Hair up or down for the event?',           keywords: ['updo', 'hairstyle'] },
+    { question: 'Bold lashes or natural look?',             keywords: ['eyelashes', 'makeup'] },
+    { question: 'Matte or dewy foundation finish?',         keywords: ['foundation', 'makeup'] },
+    { question: 'Arched or soft eyebrow shape?',            keywords: ['eyebrows', 'makeup'] },
+    { question: 'Bronzer or contour for my face shape?',    keywords: ['bronzer', 'makeup'] },
+    { question: 'Lip gloss or tinted lip balm?',            keywords: ['lipgloss', 'lipbalm'] },
+    { question: 'Which hair colour direction?',             keywords: ['hairstyle', 'hairstyle'] },
+  ],
+  travel: [
+    { question: 'Beach or mountains for the trip?',        keywords: ['beach', 'mountains'] },
+    { question: 'City break or countryside escape?',       keywords: ['city', 'countryside'] },
+    { question: 'Which view is more breathtaking?',        keywords: ['travel', 'travel'] },
+    { question: 'Road trip or flight for this one?',       keywords: ['roadtrip', 'airplane'] },
+    { question: 'Which hotel room would you pick?',         keywords: ['hotel', 'hotel'] },
+    { question: 'Backpacking or resort — which style?',    keywords: ['backpacking', 'resort'] },
+    { question: 'Sunrise or sunset at this spot?',          keywords: ['sunrise', 'sunset'] },
+    { question: 'Which city skyline wins?',                 keywords: ['cityscape', 'cityscape'] },
+    { question: 'Desert or rainforest adventure?',          keywords: ['desert', 'rainforest'] },
+    { question: 'Which beach looks more inviting?',        keywords: ['beach', 'beach'] },
+    { question: 'Camping or glamping this weekend?',        keywords: ['camping', 'glamping'] },
+    { question: 'Which local street food stall?',           keywords: ['streetfood', 'market'] },
+    { question: 'Island hopping or one long stay?',         keywords: ['island', 'coastline'] },
+    { question: 'Which trail should we hike?',              keywords: ['hiking', 'mountains'] },
+    { question: 'Old town charm or modern skyline?',        keywords: ['oldtown', 'skyline'] },
+  ],
+  sport: [
+    { question: 'Football or basketball tonight?',         keywords: ['football', 'basketball'] },
+    { question: "Which team's kit looks better?",           keywords: ['jersey', 'jersey'] },
+    { question: 'Gym session or outdoor run?',              keywords: ['gym', 'running'] },
+    { question: 'Tennis or golf this weekend?',             keywords: ['tennis', 'golf'] },
+    { question: 'Which stadium atmosphere wins?',           keywords: ['stadium', 'stadium'] },
+    { question: 'Cycling or swimming for cardio?',          keywords: ['cycling', 'swimming'] },
+    { question: 'Which sneaker for match day?',              keywords: ['sneakers', 'sneakers'] },
+    { question: 'Boxing or martial arts training?',         keywords: ['boxing', 'martialarts'] },
+    { question: 'Which play was the better call?',          keywords: ['sports', 'sports'] },
+    { question: 'Yoga or weights this morning?',            keywords: ['yoga', 'weightlifting'] },
+    { question: 'Surfing or skateboarding — which looks cooler?', keywords: ['surfing', 'skateboarding'] },
+    { question: 'Which goal celebration was better?',       keywords: ['soccer', 'soccer'] },
+    { question: 'Cricket or rugby for the highlight?',      keywords: ['cricket', 'rugby'] },
+    { question: 'Marathon or triathlon — which is tougher?', keywords: ['marathon', 'triathlon'] },
+    { question: 'Which court or pitch setup is better?',    keywords: ['basketball', 'football'] },
+  ],
+  pets: [
+    { question: 'Which good boy is cuter?',                 keywords: ['dog', 'dog'] },
+    { question: 'Cat or dog — which wins your heart?',      keywords: ['cat', 'dog'] },
+    { question: 'Which puppy photo is more adorable?',      keywords: ['puppy', 'puppy'] },
+    { question: 'Which kitten pose is cutest?',              keywords: ['kitten', 'kitten'] },
+    { question: 'Which pet costume is more fun?',            keywords: ['petcostume', 'petcostume'] },
+    { question: "Which one's having a better nap?",          keywords: ['sleepingdog', 'sleepingcat'] },
+    { question: 'Which good girl deserves a treat?',        keywords: ['dog', 'dog'] },
+    { question: 'Bunny or hamster — which is cuter?',       keywords: ['rabbit', 'hamster'] },
+    { question: 'Which dog breed steals the show?',        keywords: ['dog', 'dog'] },
+    { question: "Which pet's reaction is funnier?",          keywords: ['dog', 'cat'] },
+    { question: 'Parrot or fish — which tank wins?',        keywords: ['parrot', 'aquarium'] },
+    { question: 'Which walk-in-the-park moment is cuter?', keywords: ['dogwalk', 'dogwalk'] },
+    { question: 'Which pet is the better photobomb?',       keywords: ['pet', 'pet'] },
+    { question: 'Which paw print wins the vote?',            keywords: ['dog', 'cat'] },
+    { question: "Which one's the goodest boy today?",       keywords: ['dog', 'dog'] },
   ],
 }
 
@@ -139,13 +207,28 @@ async function createSeedPost(user, category, mode) {
   // Free users: 55% chance they paid for AI verdict on this post
   const freePaid = !isPlus && Math.random() < 0.55
 
-  const images    = categoryImages(category)
-  const questions = CATEGORY_QUESTIONS[category]
-  const question  = getRandomElement(questions)
+  const questionPool = CATEGORY_QUESTIONS[category] || []
+  const fallbackKw   = FALLBACK_KEYWORDS[category] || category
+  const picked       = questionPool.length
+    ? getRandomElement(questionPool)
+    : { question: 'Which one do you prefer?', keywords: [fallbackKw, fallbackKw] }
+  const { question, keywords: [kwA, kwB] } = picked
 
-  // Pick 2 distinct images
-  const shuffled = [...images].sort(() => Math.random() - 0.5)
-  const selectedImages = shuffled.slice(0, 2)
+  // Each option draws from its own keyword's photo pool — see the comment above
+  // CATEGORY_QUESTIONS for why (keeps the two photos thematically tied to the
+  // question instead of two unrelated random category photos). When both options
+  // share a keyword (no distinct second subject for this question), pick 2
+  // different photos from that one pool rather than risking the same lock twice.
+  let selectedImages
+  if (kwA === kwB) {
+    const shuffled = [...imagesForKeyword(kwA)].sort(() => Math.random() - 0.5)
+    selectedImages = shuffled.slice(0, 2)
+  } else {
+    selectedImages = [
+      getRandomElement(imagesForKeyword(kwA)),
+      getRandomElement(imagesForKeyword(kwB)),
+    ]
+  }
 
   const postData = {
     user_id:    user.id,
@@ -197,6 +280,9 @@ async function createSeedPost(user, category, mode) {
       home:    'Better proportions and visual harmony with the space.',
       design:  'Cleaner composition with stronger brand recall.',
       beauty:  'More flattering tones that complement natural features.',
+      travel:  'More striking scenery and stronger overall travel appeal.',
+      sport:   'Better action and energy captured in the moment.',
+      pets:    'More expressive and higher overall cuteness factor.',
     }
     await supabase.from('ai_verdicts').insert({
       post_id: post.id,
@@ -237,7 +323,7 @@ async function ensureSeedStructure() {
     return u
   }
 
-  const categories = ['fashion', 'food', 'home', 'design', 'beauty']
+  const categories = ['fashion', 'food', 'home', 'design', 'beauty', 'travel', 'sport', 'pets']
 
   for (const category of categories) {
     const { count: count12h } = await supabase

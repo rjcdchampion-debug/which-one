@@ -94,6 +94,10 @@ function HeroBanner({ posts, onOpen }) {
   const totalVotes = options.reduce((s, o) => s + (o.vote_count || 0), 0)
 
   return (
+    // Height is a literal, not content-derived — CategorySidebar.jsx's Categories
+    // panel is pinned to a height computed from this exact number (248 = label +
+    // this 220) so its bottom edge lines up with this banner's bottom edge. If
+    // this height ever changes, CATEGORIES_PANEL_HEIGHT there needs to change too.
     <button
       onClick={() => onOpen(post)}
       className="relative w-full rounded-card overflow-hidden text-left block"
