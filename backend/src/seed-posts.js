@@ -305,15 +305,29 @@ async function createSeedPost(user, category, mode) {
 
 let seedUserRotationIdx = 0
 
+// Dedicated placeholder-UUID bot accounts (00000000-0000-0000-0000-000000000001,
+// 002, 003, 004 — stylestar / foodie_uk / interior.xyz / glowup.daily in the live
+// DB) are the only accounts seed content should ever be attributed to.
+const SEED_BOT_ID_PATTERN = /^00000000-0000-0000-0000-\d{12}$/
+
 async function ensureSeedStructure() {
-  // Fetch seed users with their plan so we can decide AI verdict entitlement per post
-  const { data: seedUsers } = await supabase
+  // Fetch seed users with their plan so we can decide AI verdict entitlement per post.
+  // IMPORTANT: this used to be `.limit(10)` with no filter at all, which pulled
+  // whatever rows happened to be in `users` — including real registered accounts,
+  // not just the dedicated bot accounts. Once a real user signed up, they entered
+  // the same round-robin rotation as the bots (see `nextUser()` below) and started
+  // being credited as the "author" of auto-generated seed posts, which then showed
+  // up in that real user's own "My Posts" tab as content they never created. Now
+  // scoped to only the dedicated placeholder-UUID bot accounts (see
+  // SEED_BOT_ID_PATTERN above) so real accounts can never be swept into seeding.
+  const { data: allUsers } = await supabase
     .from('users')
     .select('id, username, plan')
-    .limit(10)
 
-  if (!seedUsers?.length) {
-    console.log('[Seed] No users found — skipping')
+  const seedUsers = (allUsers || []).filter(u => SEED_BOT_ID_PATTERN.test(u.id))
+
+  if (!seedUsers.length) {
+    console.log('[Seed] No dedicated seed-bot users found — skipping')
     return
   }
 

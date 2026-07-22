@@ -44,6 +44,22 @@ app.use((err, _req, res, _next) => {
 })
 
 // ── Post expiry background job ─────────────────────────────────────────────────
+//
+// Interval lengths are env-configurable (defaults below are the pre-launch
+// values) specifically so Railway's Serverless/sleep-on-idle feature can
+// actually engage. Railway only sleeps a service after 10+ minutes with zero
+// outbound traffic — these two jobs are the service's only regular outbound
+// traffic (both hit Supabase), so at the old cadence (60s / 5min) the service
+// could never accumulate a 10-minute quiet gap and would run (and bill) 24/7
+// regardless of whether anyone was using the site. Client-side expiry
+// detection (FeedScreen's 1s interval, see CLAUDE.md) already handles the
+// user-visible countdown/closing UX, so this backend job is a safety-net
+// cleanup pass, not something users are watching in real time — lengthening
+// it is low-risk. Tighten both back up (e.g. EXPIRY_CHECK_INTERVAL_MS=60000,
+// SEED_JOB_INTERVAL_MS=300000) via Railway env vars once real traffic
+// justifies it — no code change needed.
+const EXPIRY_CHECK_INTERVAL_MS = Number(process.env.EXPIRY_CHECK_INTERVAL_MS) || 15 * 60 * 1000  // 15 min (was 60s)
+const SEED_JOB_INTERVAL_MS     = Number(process.env.SEED_JOB_INTERVAL_MS)     || 30 * 60 * 1000  // 30 min (was 5 min)
 
 async function expirePostsJob() {
   console.log('[expiry job] running —', new Date().toISOString())
@@ -57,7 +73,7 @@ async function expirePostsJob() {
   else console.log(`[expiry job] closed ${data?.length || 0} posts`)
 }
 
-setInterval(expirePostsJob, 60_000)
+setInterval(expirePostsJob, EXPIRY_CHECK_INTERVAL_MS)
 expirePostsJob() // run once on startup
 
 // ── Seed posts background job ──────────────────────────────────────────────────
@@ -70,7 +86,7 @@ async function seedPostsJob() {
   }
 }
 
-setInterval(seedPostsJob, 5 * 60 * 1000) // every 5 minutes to catch expirations
+setInterval(seedPostsJob, SEED_JOB_INTERVAL_MS)
 seedPostsJob() // run once on startup
 
 // ── Start ─────────────────────────────────────────────────────────────────────
